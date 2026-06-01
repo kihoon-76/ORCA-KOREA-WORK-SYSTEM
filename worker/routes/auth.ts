@@ -12,10 +12,11 @@ app.post("/bootstrap", async (c) => {
     return c.json({ error: "이미 초기화되었습니다" }, 400);
   }
   const seed = [
-    { email: "admin@orca.co.kr", name: "관리자", role: "admin", department: "경영지원", position: "시스템관리자", pw: "admin1234" },
-    { email: "ceo@orca.co.kr", name: "대표이사", role: "ceo", department: "경영", position: "대표이사", pw: "ceo1234" },
-    { email: "finance@orca.co.kr", name: "재무차장", role: "finance", department: "재무팀", position: "차장", pw: "finance1234" },
-    { email: "staff@orca.co.kr", name: "홍길동", role: "staff", department: "영업팀", position: "사원", pw: "staff1234" },
+    { email: "admin@orca-korea.com", name: "관리자", role: "admin", department: "경영지원", position: "시스템관리자", pw: "admin1234" },
+    { email: "jessie@orca-korea.com", name: "Jessie", role: "ceo", department: "경영", position: "대표이사", pw: "jessie1234" },
+    { email: "isjang@orca-korea.com", name: "IS Jang", role: "finance", department: "재무팀", position: "차장", pw: "isjang1234" },
+    { email: "jason@orca-korea.com", name: "Jason", role: "staff", department: "영업팀", position: "사원", pw: "jason1234" },
+    { email: "jinhoyang@orca-korea.com", name: "Jinho Yang", role: "staff", department: "영업팀", position: "사원", pw: "jinhoyang1234" },
   ];
   for (const u of seed) {
     const hash = await hashPassword(u.pw);
