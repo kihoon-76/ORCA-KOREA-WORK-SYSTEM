@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_LABEL } from "./auth";
 import { Spinner, Icon } from "./components/ui";
 import Login from "./pages/Login";
@@ -94,7 +94,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
@@ -110,8 +112,23 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="notifications" /></button>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="settings" /></button>
+            <div className="relative">
+              <button onClick={() => setNotifOpen((v) => !v)} title="알림"
+                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="notifications" /></button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-xl">
+                    <div className="mb-1 text-sm font-bold text-primary">알림</div>
+                    <p className="text-sm text-on-surface-variant">새 알림이 없습니다.</p>
+                  </div>
+                </>
+              )}
+            </div>
+            {user!.role === "admin" && (
+              <button onClick={() => navigate("/users")} title="제어판 (직원관리)"
+                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="settings" /></button>
+            )}
             <div className="mx-2 h-8 w-px bg-outline-variant" />
             <div className="text-right">
               <p className="text-sm font-bold text-primary">{user!.name}</p>
