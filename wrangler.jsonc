@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orca-korea-work-system",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./web/dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "JWT_SECRET": "dev-secret-change-in-production"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "orca-db",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "orca-files"
+    }
+  ]
+}

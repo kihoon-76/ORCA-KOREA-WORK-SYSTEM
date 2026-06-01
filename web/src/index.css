@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-on-background antialiased;
+    font-family: "Inter", "Noto Sans KR", system-ui, sans-serif;
+  }
+  h1, h2, h3, .headline {
+    font-family: "Hanken Grotesk", "Noto Sans KR", sans-serif;
+  }
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  user-select: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+@layer components {
+  .mono-label { @apply font-mono text-[11px] uppercase tracking-wider; }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed;
+    font-family: "Hanken Grotesk", sans-serif;
+  }
+  .btn-primary { @apply btn bg-primary text-on-primary hover:bg-primary-container; }
+  .btn-secondary { @apply btn bg-surface-container-low text-primary border border-outline-variant hover:bg-surface-container; }
+  .btn-danger { @apply btn border border-error text-error hover:bg-error-container; }
+  .btn-tonal { @apply btn bg-secondary-container text-on-secondary-container hover:opacity-90; }
+
+  .input {
+    @apply w-full bg-surface-container-low border border-outline-variant px-3 py-2 text-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/40;
+  }
+  select.input { @apply bg-surface-container-lowest; }
+  .label { @apply block mono-label text-on-surface-variant mb-1.5; }
+
+  .card { @apply bg-surface-container-lowest border border-outline-variant; }
+  .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight; }
+  .th { @apply px-4 py-3 text-left mono-label text-on-surface-variant; }
+  .td { @apply px-4 py-3 text-sm text-on-surface; }
+}
