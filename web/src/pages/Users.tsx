@@ -65,7 +65,7 @@ export default function Users() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="권한">
                 <select className="input" value={u.role} onChange={(e) => setU({ ...u, role: e.target.value })}>
-                  <option value="staff">직원</option><option value="finance">재무차장</option><option value="ceo">대표이사</option><option value="admin">관리자</option>
+                  <option value="staff">직원</option><option value="finance">재무차장</option><option value="director">이사</option><option value="ceo">대표이사</option><option value="admin">관리자</option>
                 </select>
               </Field>
               <Field label="상태">

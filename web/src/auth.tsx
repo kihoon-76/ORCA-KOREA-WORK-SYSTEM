@@ -13,6 +13,7 @@ export interface User {
 export const ROLE_LABEL: Record<string, string> = {
   admin: "관리자",
   ceo: "대표이사",
+  director: "이사",
   finance: "재무차장",
   staff: "직원",
 };
