@@ -210,3 +210,29 @@ CREATE TABLE IF NOT EXISTS business_trips (
   note          TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============ 단체 채팅 ============
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id    INTEGER NOT NULL REFERENCES chat_channels(id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  body          TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, id);
+
+-- ============ 화상회의 ============
+CREATE TABLE IF NOT EXISTS meetings (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  room          TEXT NOT NULL UNIQUE,             -- Jitsi 방 식별자
+  created_by    INTEGER REFERENCES users(id),
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);

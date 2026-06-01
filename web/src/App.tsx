@@ -14,6 +14,8 @@ import Inventory from "./pages/Inventory";
 import Materials from "./pages/Materials";
 import Trips from "./pages/Trips";
 import Users from "./pages/Users";
+import Chat from "./pages/Chat";
+import Meetings from "./pages/Meetings";
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 const NAV: { group: string; items: NavItem[] }[] = [
@@ -23,6 +25,10 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
     { to: "/approvals", label: "전자결재", icon: "approval" },
+  ]},
+  { group: "Communication", items: [
+    { to: "/chat", label: "단체 채팅", icon: "forum" },
+    { to: "/meetings", label: "화상회의", icon: "videocam" },
   ]},
   { group: "Trade & Logistics", items: [
     { to: "/imports", label: "원료 수입현황", icon: "sailing" },
@@ -134,6 +140,8 @@ export default function App() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/approvals" element={<Approvals />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/meetings" element={<Meetings />} />
         <Route path="/imports" element={<Imports />} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />

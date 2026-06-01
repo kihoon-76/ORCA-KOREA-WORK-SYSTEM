@@ -11,6 +11,8 @@ import inventoryRoutes from "./routes/inventory";
 import materialsRoutes from "./routes/materials";
 import tripsRoutes from "./routes/trips";
 import filesRoutes from "./routes/files";
+import chatRoutes from "./routes/chat";
+import meetingsRoutes from "./routes/meetings";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -25,6 +27,8 @@ api.route("/inventory", inventoryRoutes);
 api.route("/materials", materialsRoutes);
 api.route("/trips", tripsRoutes);
 api.route("/files", filesRoutes);
+api.route("/chat", chatRoutes);
+api.route("/meetings", meetingsRoutes);
 
 // 대시보드 요약
 api.get("/dashboard", authMiddleware, async (c) => {
