@@ -8,6 +8,8 @@ import Tasks from "./pages/Tasks";
 import Attendance from "./pages/Attendance";
 import Calendar from "./pages/Calendar";
 import Approvals from "./pages/Approvals";
+import WeeklyReports from "./pages/WeeklyReports";
+import WeeklyReminder from "./components/WeeklyReminder";
 import Imports from "./pages/Imports";
 import Exports from "./pages/Exports";
 import Inventory from "./pages/Inventory";
@@ -25,6 +27,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
     { to: "/approvals", label: "전자결재", icon: "approval" },
+    { to: "/weekly", label: "주간결산 보고", icon: "event_note" },
   ]},
   { group: "Communication", items: [
     { to: "/chat", label: "단체 채팅", icon: "forum" },
@@ -145,12 +148,14 @@ export default function App() {
 
   return (
     <Layout>
+      <WeeklyReminder />
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/approvals" element={<Approvals />} />
+        <Route path="/weekly" element={<WeeklyReports />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/meetings" element={<Meetings />} />
         <Route path="/imports" element={<Imports />} />

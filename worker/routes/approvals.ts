@@ -10,6 +10,7 @@ const APPROVAL_FLOWS: Record<string, string[]> = {
   payment: ["ceo"],        // 자금결제: 재무차장 상신 -> 대표 승인
   general: ["ceo"],        // 일반 결재
   trip: ["ceo"],           // 출장 결재
+  weekly: ["ceo"],         // 주간결산: 담당자 상신 -> 대표 승인
 };
 
 // 목록: ?inbox=1 (내가 결재할 차례) | ?mine=1 (내가 상신) | 전체
@@ -108,8 +109,14 @@ app.post("/:id/action", async (c) => {
       await c.env.DB.prepare("UPDATE approvals SET status = 'approved', updated_at = datetime('now') WHERE id = ?").bind(id).run();
     }
   }
-  const item = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first();
-  return c.json({ ok: true, item });
+  // 주간결산 보고 연동 시 상태 동기화
+  const updated = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first<any>();
+  if (updated?.related_type === "weekly_report" && updated.related_id && updated.status !== "pending") {
+    await c.env.DB.prepare(
+      "UPDATE weekly_reports SET status = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(updated.status, updated.related_id).run();
+  }
+  return c.json({ ok: true, item: updated });
 });
 
 app.delete("/:id", async (c) => {

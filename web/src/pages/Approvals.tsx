@@ -3,7 +3,7 @@ import { api } from "../api";
 import { useAuth, ROLE_LABEL } from "../auth";
 import { PageHeader, Spinner, Empty, Modal, Field, Badge } from "../components/ui";
 
-const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재" };
+const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재", weekly: "주간결산" };
 
 export default function Approvals() {
   const { user } = useAuth();

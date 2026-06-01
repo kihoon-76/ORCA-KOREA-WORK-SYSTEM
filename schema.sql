@@ -92,10 +92,28 @@ CREATE TABLE IF NOT EXISTS approval_steps (
   acted_at      TEXT
 );
 
+-- ============ 주간결산 보고 ============
+-- 각 담당자가 매주 진행사항/완료사항을 작성하여 대표(ceo)에게 결재 상신한다.
+-- 첨부파일은 attachments(entity_type='weekly_report'). 결재는 approvals(doc_type='weekly')와 연동.
+CREATE TABLE IF NOT EXISTS weekly_reports (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  week_start    TEXT NOT NULL,                   -- 해당 주 월요일 (YYYY-MM-DD)
+  week_label    TEXT,                            -- 표시용 (예: 2026-06-01 ~ 06-05)
+  progress      TEXT,                            -- 진행사항
+  completed     TEXT,                            -- 완료사항
+  status        TEXT NOT NULL DEFAULT 'draft',   -- draft | submitted | approved | rejected
+  approval_id   INTEGER REFERENCES approvals(id),-- 연동된 결재 문서
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, week_start)
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_user ON weekly_reports(user_id, week_start);
+
 -- ============ 첨부파일 (R2) - 모든 모듈 공용 ============
 CREATE TABLE IF NOT EXISTS attachments (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  entity_type   TEXT NOT NULL,   -- import | export | inventory | material | trip | approval | task
+  entity_type   TEXT NOT NULL,   -- import | export | inventory | material | trip | approval | task | weekly_report
   entity_id     INTEGER NOT NULL,
   category      TEXT,            -- contract | shipping_docs | analysis | trip_plan | etc
   file_name     TEXT NOT NULL,
