@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { api, getToken, setToken, clearToken } from "./api";
+import { api, getToken, setToken, clearToken, ApiError } from "./api";
 
 export interface User {
   id: number;
@@ -20,7 +20,7 @@ export const ROLE_LABEL: Record<string, string> = {
 interface AuthCtx {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -39,13 +39,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .get<{ user: User }>("/auth/me")
       .then((r) => setUser(r.user))
-      .catch(() => clearToken())
+      .catch((e) => { if (e instanceof ApiError && e.status === 401) clearToken(); }) // 만료/무효 토큰만 제거 (네트워크 오류엔 유지)
       .finally(() => setLoading(false));
   }, []);
 
-  async function login(email: string, password: string) {
-    const r = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
-    setToken(r.token);
+  async function login(email: string, password: string, remember = true) {
+    const r = await api.post<{ token: string; user: User }>("/auth/login", { email, password, remember });
+    setToken(r.token, remember);
     setUser(r.user);
   }
 

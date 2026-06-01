@@ -1,13 +1,21 @@
 const TOKEN_KEY = "orca_token";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 }
-export function setToken(t: string) {
-  localStorage.setItem(TOKEN_KEY, t);
+// persist=true: 브라우저를 닫아도 유지(localStorage) / false: 세션 동안만(sessionStorage)
+export function setToken(t: string, persist = true) {
+  if (persist) {
+    localStorage.setItem(TOKEN_KEY, t);
+    sessionStorage.removeItem(TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(TOKEN_KEY, t);
+    localStorage.removeItem(TOKEN_KEY);
+  }
 }
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 export class ApiError extends Error {

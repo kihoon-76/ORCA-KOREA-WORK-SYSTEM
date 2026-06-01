@@ -10,11 +10,12 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [bootMsg, setBootMsg] = useState("");
+  const [remember, setRemember] = useState(true);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(""); setBusy(true);
-    try { await login(email, password); }
+    try { await login(email, password, remember); }
     catch (err: any) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -59,6 +60,11 @@ export default function Login() {
               <label className="label">비밀번호</label>
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-on-surface-variant">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                className="h-4 w-4 rounded border-outline-variant text-secondary focus:ring-secondary" />
+              로그인 상태 유지 <span className="text-xs opacity-60">(공용 PC에서는 해제)</span>
+            </label>
             {error && <p className="flex items-center gap-1 text-sm text-error"><Icon name="error" size={18} />{error}</p>}
             {bootMsg && <p className="flex items-center gap-1 text-sm text-success"><Icon name="check_circle" size={18} />{bootMsg}</p>}
             <button className="btn-primary w-full" disabled={busy}>{busy ? "로그인 중..." : "로그인"}</button>

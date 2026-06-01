@@ -28,7 +28,7 @@ app.post("/bootstrap", async (c) => {
 });
 
 app.post("/login", async (c) => {
-  const { email, password } = await c.req.json<{ email: string; password: string }>();
+  const { email, password, remember } = await c.req.json<{ email: string; password: string; remember?: boolean }>();
   if (!email || !password) return c.json({ error: "이메일과 비밀번호를 입력하세요" }, 400);
   const user = await c.env.DB.prepare(
     "SELECT * FROM users WHERE email = ? AND active = 1"
@@ -36,12 +36,14 @@ app.post("/login", async (c) => {
   if (!user || !(await verifyPassword(password, user.password_hash))) {
     return c.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다" }, 401);
   }
+  // 로그인 상태 유지: 30일 / 미유지: 12시간
+  const ttl = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 12;
   const payload: JwtPayload = {
     uid: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 7일
+    exp: Math.floor(Date.now() / 1000) + ttl,
   };
   const token = await signJwt(payload, c.env.JWT_SECRET);
   return c.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department, position: user.position } });
