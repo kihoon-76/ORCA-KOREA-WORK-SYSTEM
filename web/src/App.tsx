@@ -49,15 +49,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
       {open && <div className="fixed inset-0 z-40 bg-primary/30 md:hidden" onClick={onClose} />}
       <aside className={`fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-outline-variant bg-surface-container transition-transform md:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-6 pb-4 pt-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-on-primary">
-              <Icon name="water" />
-            </div>
-            <div>
-              <div className="headline text-lg font-black leading-none text-primary">ORCA KOREA</div>
-              <div className="mono-label text-on-surface-variant opacity-70">Biofuel Logistics</div>
-            </div>
-          </div>
+          <NavLink to="/">
+            <img src="/orca-logo.png" alt="ORCA KOREA" className="w-full max-w-[200px]" />
+          </NavLink>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-2 scrollbar-hide">
           {NAV.map((g) => (
