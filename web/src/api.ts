@@ -52,6 +52,12 @@ export const api = {
     fd.append("category", category);
     return request("POST", "/files/upload", fd);
   },
+  uploadChat: async (channelId: number, file: File, body = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (body) fd.append("body", body);
+    return request(`POST`, `/chat/channels/${channelId}/upload`, fd);
+  },
   download: async (id: number, fileName: string) => {
     const token = getToken();
     const res = await fetch(`/api/files/download/${id}`, {

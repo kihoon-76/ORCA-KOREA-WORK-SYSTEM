@@ -222,7 +222,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   channel_id    INTEGER NOT NULL REFERENCES chat_channels(id),
   user_id       INTEGER NOT NULL REFERENCES users(id),
-  body          TEXT NOT NULL,
+  body          TEXT NOT NULL DEFAULT '',
+  attachment_id INTEGER REFERENCES attachments(id),  -- 첨부파일 (선택)
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, id);
