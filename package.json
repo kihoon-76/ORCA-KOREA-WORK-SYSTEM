@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev:web": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-worker.mjs",
+    "build:web": "vite build",
     "dev": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "db:init": "wrangler d1 execute orca-db --local --file=./schema.sql",
