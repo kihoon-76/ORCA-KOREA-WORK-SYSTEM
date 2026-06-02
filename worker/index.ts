@@ -42,7 +42,7 @@ api.get("/dashboard", authMiddleware, async (c) => {
     db.prepare(`SELECT COUNT(*) AS n FROM approvals a WHERE a.status='pending' AND EXISTS (
         SELECT 1 FROM approval_steps s WHERE s.approval_id=a.id AND s.step_order=a.current_step
         AND s.status='pending' AND s.approver_role=?)`).bind(user.role).first<{ n: number }>(),
-    db.prepare("SELECT COUNT(*) AS n FROM imports WHERE status NOT IN ('released','done')").first<{ n: number }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM imports WHERE status NOT IN ('delivered','done')").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM exports WHERE status != 'done'").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM business_trips WHERE status != 'completed'").first<{ n: number }>(),
   ]);

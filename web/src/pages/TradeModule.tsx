@@ -65,7 +65,7 @@ export default function TradeModule({ config }: { config: Config }) {
                   <td className="td"><Badge value={r.status} /></td>
                   <td className="td text-right whitespace-nowrap">
                     <button className="text-xs text-brand-600 hover:underline" onClick={() => openEdit(r)}>상세/수정</button>
-                    {config.kind === "import" && r.status !== "stored" && r.status !== "released" && (
+                    {config.kind === "import" && r.status !== "stored" && r.status !== "released" && r.status !== "delivered" && (
                       <button className="ml-2 text-xs text-teal-600 hover:underline" onClick={() => receive(r)}>입고</button>
                     )}
                     <button className="ml-2 text-xs text-red-500 hover:underline" onClick={() => remove(r)}>삭제</button>
