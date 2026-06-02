@@ -10,7 +10,7 @@ export default function Approvals() {
   const [tab, setTab] = useState<"inbox" | "mine" | "all">(user!.role === "ceo" ? "inbox" : "mine");
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createType, setCreateType] = useState<"payment" | "general" | null>(null);
   const [detail, setDetail] = useState<any>(null);
 
   function load() {
@@ -20,13 +20,19 @@ export default function Approvals() {
   }
   useEffect(load, [tab]);
 
-  // 자금결제 상신은 재무차장(finance) / 관리자
-  const canRequest = user!.role === "finance" || user!.role === "admin";
+  // 자금결제 상신은 재무차장(finance) / 관리자, 일반결제 상신은 모든 직원
+  const canRequestPayment = user!.role === "finance" || user!.role === "admin";
+  const canRequestGeneral = user!.role !== "ceo";
 
   return (
     <div>
       <PageHeader title="전자결재" subtitle="자금결제: 재무차장 상신 → 대표이사 승인"
-        action={canRequest ? <button className="btn-primary" onClick={() => setCreateOpen(true)}>+ 자금결제 상신</button> : undefined} />
+        action={(canRequestPayment || canRequestGeneral) ? (
+          <div className="flex gap-2">
+            {canRequestPayment && <button className="btn-primary" onClick={() => setCreateType("payment")}>+ 자금결제 상신</button>}
+            {canRequestGeneral && <button className="btn-secondary" onClick={() => setCreateType("general")}>+ 일반결제 상신</button>}
+          </div>
+        ) : undefined} />
 
       <div className="mb-4 flex gap-1 rounded-lg bg-slate-200 p-1 text-sm w-fit">
         {[["inbox", "결재함"], ["mine", "내 상신함"], ["all", "전체"]].map(([k, l]) => (
@@ -59,26 +65,24 @@ export default function Approvals() {
         </div>
       )}
 
-      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); load(); }} />
+      <CreateModal docType={createType} onClose={() => setCreateType(null)} onSaved={() => { setCreateType(null); load(); }} />
       {detail && <DetailModal id={detail.id} role={user!.role} onClose={() => { setDetail(null); load(); }} />}
     </div>
   );
 }
 
-function CreateModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<any>({ doc_type: "payment", currency: "KRW" });
+function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "general" | null; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState<any>({ currency: "KRW" });
+  useEffect(() => { if (docType) setF({ currency: "KRW" }); }, [docType]);
+  if (!docType) return null;
+  const title = docType === "payment" ? "자금결제 상신" : "일반결제 상신";
   async function save() {
-    await api.post("/approvals", { doc_type: f.doc_type, title: f.title, content: f.content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
-    setF({ doc_type: "payment", currency: "KRW" }); onSaved();
+    await api.post("/approvals", { doc_type: docType, title: f.title, content: f.content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
+    setF({ currency: "KRW" }); onSaved();
   }
   return (
-    <Modal open={open} onClose={onClose} title="자금결제 상신">
+    <Modal open onClose={onClose} title={title}>
       <div className="space-y-3">
-        <Field label="결재 유형">
-          <select className="input" value={f.doc_type} onChange={(e) => setF({ ...f, doc_type: e.target.value })}>
-            <option value="payment">자금결제</option><option value="general">일반결재</option><option value="trip">출장결재</option>
-          </select>
-        </Field>
         <Field label="제목"><input className="input" value={f.title || ""} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2"><Field label="금액"><input type="number" className="input" value={f.amount || ""} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field></div>
