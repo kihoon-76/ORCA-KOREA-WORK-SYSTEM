@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth, ROLE_LABEL } from "../auth";
 import { PageHeader, Spinner, Empty, Modal, Field, Badge, Icon, FileManager } from "../components/ui";
+import { downloadXlsx } from "../xlsx";
 
 const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재", weekly: "주간결산" };
 
@@ -118,23 +119,9 @@ function parsePaymentContent(content: string): Record<string, string> {
   return out;
 }
 
-// 엑셀(CSV) 다운로드 — UTF-8 BOM 으로 한글 깨짐 방지, 더블클릭 시 엑셀에서 바로 열림
-function csvCell(v: any): string {
-  const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const body = rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
-  const blob = new Blob(["﻿" + body], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-}
 const STATUS_TEXT: Record<string, string> = { pending: "결재중", approved: "승인", rejected: "반려", cancelled: "취소됨" };
 // 자금결제 한 건 → 항목/내용 2열 표 (엑셀 저장용)
-function paymentRows(d: any): (string | number)[][] {
+function paymentRows(d: any): string[][] {
   const amountStr = d.amount ? `${d.currency || "KRW"} ${Number(d.amount).toLocaleString()}` : "";
   const rows: [string, string][] = [
     ["제목", d.title || ""], ["지급구분", d.category || ""], ["지급처(수취인)", d.payee || ""],
@@ -147,7 +134,10 @@ function paymentRows(d: any): (string | number)[][] {
   return [["항목", "내용"], ...rows];
 }
 function paymentFilename(title?: string): string {
-  return `자금결제_${(title || "상신서").replace(/[\\/:*?"<>|]/g, "_")}.csv`;
+  return `자금결제_${(title || "상신서").replace(/[\\/:*?"<>|]/g, "_")}.xlsx`;
+}
+function exportPaymentXlsx(title: string, d: any) {
+  downloadXlsx(paymentFilename(title), "자금결제", "자금결제 상신서", paymentRows(d));
 }
 
 function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "payment" | "general" | null; editItem?: any; onClose: () => void; onSaved: () => void }) {
@@ -195,7 +185,7 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
     } catch (e: any) { alert(e.message); }
     finally { setBusy(false); }
   }
-  function exportExcel() { downloadCsv(paymentFilename(f.title), paymentRows(f)); }
+  function exportExcel() { exportPaymentXlsx(f.title, f); }
 
   return (
     <Modal open onClose={onClose} title={(isEdit ? "수정 · " : "") + (isPay ? "자금결제 상신" : "일반결제 상신")} wide={isPay}>
@@ -305,10 +295,10 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
   const canEdit = a.status === "pending" && isMine;
   function exportExcel() {
     const p = parsePaymentContent(a.content || "");
-    downloadCsv(paymentFilename(a.title), paymentRows({
+    exportPaymentXlsx(a.title, {
       title: a.title, amount: a.amount, currency: a.currency, ...p,
       status: a.status, requester: a.requester_name, createdAt: (a.created_at || "").slice(0, 10),
-    }));
+    });
   }
 
   return (
