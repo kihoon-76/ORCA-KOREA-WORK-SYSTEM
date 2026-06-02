@@ -48,7 +48,7 @@ app.post("/imports/:id/receive", async (c) => {
     `INSERT INTO inventory_txns (material_id, material_name, txn_type, source, source_id, quantity, unit, warehouse, txn_date, created_by)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
   ).bind(imp.material_id, imp.material_name, "in", "import", imp.id, qty, imp.unit, body.warehouse || null, txnDate, c.get("user").uid).run();
-  await c.env.DB.prepare("UPDATE imports SET status = 'cleared', updated_at = datetime('now') WHERE id = ?").bind(imp.id).run();
+  await c.env.DB.prepare("UPDATE imports SET status = 'stored', updated_at = datetime('now') WHERE id = ?").bind(imp.id).run();
   return c.json({ ok: true });
 });
 

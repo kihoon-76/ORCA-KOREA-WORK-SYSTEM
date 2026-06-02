@@ -70,12 +70,14 @@ const STATUS_STYLES: Record<string, string> = {
   draft: "bg-surface-container-highest text-on-surface-variant", submitted: "bg-tertiary-fixed text-on-tertiary-container",
   contracted: "bg-surface-container-highest text-on-surface-variant", shipped: "bg-secondary-fixed text-on-secondary-container", arrived: "bg-primary-fixed text-on-primary-fixed",
   cleared: "bg-success-container text-success", planned: "bg-tertiary-fixed text-on-tertiary-container", completed: "bg-success-container text-success",
+  customs: "bg-primary-fixed text-on-primary-fixed", stored: "bg-secondary-fixed text-on-secondary-container", released: "bg-success-container text-success",
   low: "bg-surface-container-highest text-on-surface-variant", normal: "bg-surface-container-highest text-on-surface-variant", high: "bg-tertiary-fixed text-on-tertiary-container", urgent: "bg-error-container text-on-error-container",
 };
 const STATUS_LABEL: Record<string, string> = {
   todo: "대기", in_progress: "진행중", done: "완료", pending: "결재중", approved: "승인", rejected: "반려", cancelled: "취소됨",
   draft: "작성중", submitted: "상신완료",
   contracted: "계약", shipped: "선적", arrived: "도착", cleared: "통관/입고", planned: "예정", completed: "완료",
+  customs: "통관", stored: "입고", released: "출고완료",
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급", annual: "연차", sick: "병가",
 };
 export function Badge({ value }: { value: string }) {

@@ -10,6 +10,11 @@ export default function Imports() {
       entityType: "import",
       partnerKey: "supplier",
       partnerLabel: "공급사(수출자)",
+      statusOptions: [
+        { v: "customs", l: "통관" },
+        { v: "stored", l: "입고" },
+        { v: "released", l: "출고완료" },
+      ],
     }} />
   );
 }

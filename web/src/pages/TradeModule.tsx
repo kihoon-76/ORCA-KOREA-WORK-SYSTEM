@@ -10,19 +10,15 @@ interface Config {
   entityType: string;     // import | export
   partnerKey: "supplier" | "buyer";
   partnerLabel: string;
+  statusOptions: { v: string; l: string }[];
 }
-
-const STATUS_OPTIONS = [
-  { v: "contracted", l: "계약" }, { v: "shipped", l: "선적" }, { v: "arrived", l: "도착" },
-  { v: "cleared", l: "통관/입고" }, { v: "done", l: "완료" },
-];
 
 export default function TradeModule({ config }: { config: Config }) {
   const { items, loading, reload } = useList<any>(config.endpoint);
   const [open, setOpen] = useState(false);
   const [row, setRow] = useState<any>(null);
 
-  function openNew() { setRow({ status: "contracted", unit: "MT", currency: "USD" }); setOpen(true); }
+  function openNew() { setRow({ status: config.statusOptions[0].v, unit: "MT", currency: "USD" }); setOpen(true); }
   function openEdit(r: any) { setRow({ ...r }); setOpen(true); }
 
   async function save() {
@@ -69,7 +65,7 @@ export default function TradeModule({ config }: { config: Config }) {
                   <td className="td"><Badge value={r.status} /></td>
                   <td className="td text-right whitespace-nowrap">
                     <button className="text-xs text-brand-600 hover:underline" onClick={() => openEdit(r)}>상세/수정</button>
-                    {config.kind === "import" && r.status !== "cleared" && r.status !== "done" && (
+                    {config.kind === "import" && r.status !== "stored" && r.status !== "released" && (
                       <button className="ml-2 text-xs text-teal-600 hover:underline" onClick={() => receive(r)}>입고</button>
                     )}
                     <button className="ml-2 text-xs text-red-500 hover:underline" onClick={() => remove(r)}>삭제</button>
@@ -92,7 +88,7 @@ export default function TradeModule({ config }: { config: Config }) {
               <Field label="LC번호"><input className="input" value={row.lc_no || ""} onChange={(e) => setRow({ ...row, lc_no: e.target.value })} /></Field>
               <Field label="상태">
                 <select className="input" value={row.status} onChange={(e) => setRow({ ...row, status: e.target.value })}>
-                  {STATUS_OPTIONS.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+                  {config.statusOptions.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
                 </select>
               </Field>
               <Field label="물량"><input type="number" className="input" value={row.quantity ?? ""} onChange={(e) => setRow({ ...row, quantity: e.target.value })} /></Field>

@@ -67,7 +67,7 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-outline-variant">
                   {data.upcoming_shipments.map((s: any, i: number) => (
                     <tr key={i} className="transition-colors hover:bg-surface-container-low">
-                      <td className="td"><Badge value={s.kind === "import" ? "arrived" : "shipped"} /></td>
+                      <td className="td"><span className="mr-1 text-xs text-on-surface-variant">{s.kind === "import" ? "수입" : "수출"}</span><Badge value={s.status} /></td>
                       <td className="td font-bold">{s.material_name}</td>
                       <td className="td">{s.vessel || "-"}</td>
                       <td className="td font-mono text-xs">{s.eta}</td>

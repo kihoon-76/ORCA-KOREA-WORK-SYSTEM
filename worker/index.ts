@@ -42,14 +42,14 @@ api.get("/dashboard", authMiddleware, async (c) => {
     db.prepare(`SELECT COUNT(*) AS n FROM approvals a WHERE a.status='pending' AND EXISTS (
         SELECT 1 FROM approval_steps s WHERE s.approval_id=a.id AND s.step_order=a.current_step
         AND s.status='pending' AND s.approver_role=?)`).bind(user.role).first<{ n: number }>(),
-    db.prepare("SELECT COUNT(*) AS n FROM imports WHERE status != 'done'").first<{ n: number }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM imports WHERE status NOT IN ('released','done')").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM exports WHERE status != 'done'").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM business_trips WHERE status != 'completed'").first<{ n: number }>(),
   ]);
   // 다가오는 선박 일정 (ETA 기준)
   const { results: upcoming } = await db.prepare(
-    `SELECT 'import' AS kind, id, material_name, vessel, eta FROM imports WHERE eta >= date('now')
-     UNION ALL SELECT 'export' AS kind, id, material_name, vessel, eta FROM exports WHERE eta >= date('now')
+    `SELECT 'import' AS kind, id, material_name, vessel, eta, status FROM imports WHERE eta >= date('now')
+     UNION ALL SELECT 'export' AS kind, id, material_name, vessel, eta, status FROM exports WHERE eta >= date('now')
      ORDER BY eta LIMIT 8`
   ).all();
   return c.json({

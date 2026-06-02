@@ -10,6 +10,10 @@ export default function Exports() {
       entityType: "export",
       partnerKey: "buyer",
       partnerLabel: "바이어(수입자)",
+      statusOptions: [
+        { v: "contracted", l: "계약" }, { v: "shipped", l: "선적" }, { v: "arrived", l: "도착" },
+        { v: "cleared", l: "통관/입고" }, { v: "done", l: "완료" },
+      ],
     }} />
   );
 }
