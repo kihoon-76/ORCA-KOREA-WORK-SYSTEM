@@ -141,7 +141,7 @@ function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "gene
         )}
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2"><Field label="금액"><input type="number" className="input" value={f.amount || ""} onChange={set("amount")} /></Field></div>
+          <div className="col-span-2"><Field label="금액"><input type="text" inputMode="numeric" className="input" value={f.amount ? Number(f.amount).toLocaleString() : ""} onChange={(e) => setF({ ...f, amount: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" /></Field></div>
           <Field label="통화"><input className="input" value={f.currency} onChange={set("currency")} /></Field>
         </div>
 
