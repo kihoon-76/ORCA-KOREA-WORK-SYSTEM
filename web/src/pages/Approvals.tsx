@@ -20,8 +20,9 @@ export default function Approvals() {
   }
   useEffect(load, [tab]);
 
-  // 자금결제 상신은 재무차장(finance) / 관리자, 일반결제 상신은 모든 직원
-  const canRequestPayment = user!.role === "finance" || user!.role === "admin";
+  // 자금결제 상신은 재무차장(finance)·관리자 또는 재무팀 소속, 일반결제 상신은 모든 직원
+  const inFinanceDept = (user!.department || "").includes("재무");
+  const canRequestPayment = user!.role === "finance" || user!.role === "admin" || inFinanceDept;
   const canRequestGeneral = user!.role !== "ceo";
 
   return (
@@ -71,28 +72,96 @@ export default function Approvals() {
   );
 }
 
+const PAY_CATEGORIES = ["자재대금", "용역비", "운영비", "세금/공과금", "급여/4대보험", "임차료", "기타"];
+const PAY_METHODS = ["계좌이체", "법인카드", "현금", "어음/수표"];
+
+// 자금결제 상신서 본문 조립 (구조화 필드 → content 텍스트)
+function buildPaymentContent(f: any): string {
+  const rows: [string, any][] = [
+    ["지급구분", f.category],
+    ["지급처(수취인)", f.payee],
+    ["결제수단", f.method],
+    ["지급예정일", f.payDate],
+    ["입금은행", f.bank],
+    ["계좌번호", f.account],
+    ["예금주", f.holder],
+  ];
+  const lines = ["[자금결제 상신서]"];
+  for (const [k, v] of rows) if (v) lines.push(`· ${k}: ${v}`);
+  if (f.reason) lines.push("", "[지출 사유]", f.reason);
+  return lines.join("\n");
+}
+
 function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "general" | null; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<any>({ currency: "KRW" });
-  useEffect(() => { if (docType) setF({ currency: "KRW" }); }, [docType]);
+  const init = { currency: "KRW", category: PAY_CATEGORIES[0], method: PAY_METHODS[0] };
+  const [f, setF] = useState<any>(init);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (docType) { setF(init); setBusy(false); } }, [docType]);
   if (!docType) return null;
-  const title = docType === "payment" ? "자금결제 상신" : "일반결제 상신";
+  const isPay = docType === "payment";
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+
+  const valid = isPay ? f.title && f.payee && f.amount : f.title;
   async function save() {
-    await api.post("/approvals", { doc_type: docType, title: f.title, content: f.content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
-    setF({ currency: "KRW" }); onSaved();
+    setBusy(true);
+    try {
+      const content = isPay ? buildPaymentContent(f) : f.content;
+      await api.post("/approvals", { doc_type: docType, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
+      onSaved();
+    } catch (e: any) { alert(e.message); }
+    finally { setBusy(false); }
   }
+
   return (
-    <Modal open onClose={onClose} title={title}>
+    <Modal open onClose={onClose} title={isPay ? "자금결제 상신" : "일반결제 상신"} wide={isPay}>
       <div className="space-y-3">
-        <Field label="제목"><input className="input" value={f.title || ""} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
+        <Field label="제목"><input className="input" value={f.title || ""} onChange={set("title")} placeholder={isPay ? "예) 2026년 6월 자재대금 지급" : "결재 제목"} /></Field>
+
+        {isPay && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="지급구분">
+                <select className="input" value={f.category} onChange={set("category")}>
+                  {PAY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Field>
+              <Field label="결제수단">
+                <select className="input" value={f.method} onChange={set("method")}>
+                  {PAY_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field label="지급처 (수취인/거래처)"><input className="input" value={f.payee || ""} onChange={set("payee")} /></Field>
+          </>
+        )}
+
         <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2"><Field label="금액"><input type="number" className="input" value={f.amount || ""} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field></div>
-          <Field label="통화"><input className="input" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })} /></Field>
+          <div className="col-span-2"><Field label="금액"><input type="number" className="input" value={f.amount || ""} onChange={set("amount")} /></Field></div>
+          <Field label="통화"><input className="input" value={f.currency} onChange={set("currency")} /></Field>
         </div>
-        <Field label="내용"><textarea className="input" rows={4} value={f.content || ""} onChange={(e) => setF({ ...f, content: e.target.value })} /></Field>
+
+        {isPay && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="지급예정일"><input type="date" className="input" value={f.payDate || ""} onChange={set("payDate")} /></Field>
+              <Field label="입금은행"><input className="input" value={f.bank || ""} onChange={set("bank")} placeholder="예) 국민은행" /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="계좌번호"><input className="input" value={f.account || ""} onChange={set("account")} /></Field>
+              <Field label="예금주"><input className="input" value={f.holder || ""} onChange={set("holder")} /></Field>
+            </div>
+            <Field label="지출 사유"><textarea className="input" rows={3} value={f.reason || ""} onChange={set("reason")} placeholder="지급 근거 및 상세 내역" /></Field>
+          </>
+        )}
+
+        {!isPay && (
+          <Field label="내용"><textarea className="input" rows={4} value={f.content || ""} onChange={set("content")} /></Field>
+        )}
+
         <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">상신 시 대표이사 결재함으로 전달되며, 대표이사 승인 시 최종 확정됩니다.</p>
         <div className="flex justify-end gap-2 pt-1">
           <button className="btn-secondary" onClick={onClose}>취소</button>
-          <button className="btn-primary" onClick={save} disabled={!f.title}>상신</button>
+          <button className="btn-primary" onClick={save} disabled={!valid || busy}>상신</button>
         </div>
       </div>
     </Modal>
