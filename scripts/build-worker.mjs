@@ -2,6 +2,7 @@
 // Pages 는 빌드 산출물 디렉터리(web/dist)에 _worker.js 가 있으면 모든 요청을 이 워커로 라우팅하고,
 // 정적 자산은 env.ASSETS 로 서빙한다. (Hono 앱이 이미 그 패턴으로 구현되어 있음)
 import { build } from "esbuild";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -20,5 +21,9 @@ await build({
   loader: { ".ts": "ts" },
   logLevel: "info",
 });
+
+// Workers 모드(wrangler deploy)에서는 worker/index.ts 가 워커 엔트리이므로
+// 자산 폴더의 _worker.js 는 공개 자산으로 업로드되지 않도록 제외한다.
+writeFileSync(resolve(root, "web/dist/.assetsignore"), "_worker.js\n");
 
 console.log("✓ web/dist/_worker.js 생성 완료");
