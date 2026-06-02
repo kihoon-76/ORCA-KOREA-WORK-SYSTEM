@@ -10,6 +10,7 @@ import Calendar from "./pages/Calendar";
 import Approvals from "./pages/Approvals";
 import WeeklyReports from "./pages/WeeklyReports";
 import WeeklyReminder from "./components/WeeklyReminder";
+import NotificationBell from "./components/NotificationBell";
 import Imports from "./pages/Imports";
 import Exports from "./pages/Exports";
 import Inventory from "./pages/Inventory";
@@ -93,7 +94,6 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
@@ -109,19 +109,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <button onClick={() => setNotifOpen((v) => !v)} title="알림"
-                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="notifications" /></button>
-              {notifOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
-                  <div className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-xl">
-                    <div className="mb-1 text-sm font-bold text-primary">알림</div>
-                    <p className="text-sm text-on-surface-variant">새 알림이 없습니다.</p>
-                  </div>
-                </>
-              )}
-            </div>
+            <NotificationBell />
             {user!.role === "admin" && (
               <button onClick={() => navigate("/users")} title="제어판 (직원관리)"
                 className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container-low"><Icon name="settings" /></button>

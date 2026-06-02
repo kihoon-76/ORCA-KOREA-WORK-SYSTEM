@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth, ROLE_LABEL } from "../auth";
-import { PageHeader, Spinner, Empty, Modal, Field, Badge } from "../components/ui";
+import { PageHeader, Spinner, Empty, Modal, Field, Badge, Icon, FileManager } from "../components/ui";
 
 const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재", weekly: "주간결산" };
 
@@ -77,13 +77,13 @@ const PAY_METHODS = ["계좌이체", "법인카드", "현금", "어음/수표"];
 
 // 자금결제 상신서 본문 조립 (구조화 필드 → content 텍스트)
 function buildPaymentContent(f: any): string {
+  const amountStr = f.amount ? `${f.currency || "KRW"} ${Number(f.amount).toLocaleString()}` : "";
   const rows: [string, any][] = [
     ["지급구분", f.category],
     ["지급처(수취인)", f.payee],
+    ["금액", amountStr],
     ["결제수단", f.method],
     ["지급예정일", f.payDate],
-    ["입금은행", f.bank],
-    ["계좌번호", f.account],
     ["예금주", f.holder],
   ];
   const lines = ["[자금결제 상신서]"];
@@ -95,8 +95,9 @@ function buildPaymentContent(f: any): string {
 function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "general" | null; onClose: () => void; onSaved: () => void }) {
   const init = { currency: "KRW", category: PAY_CATEGORIES[0], method: PAY_METHODS[0] };
   const [f, setF] = useState<any>(init);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (docType) { setF(init); setBusy(false); } }, [docType]);
+  useEffect(() => { if (docType) { setF(init); setFiles([]); setBusy(false); } }, [docType]);
   if (!docType) return null;
   const isPay = docType === "payment";
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
@@ -106,7 +107,11 @@ function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "gene
     setBusy(true);
     try {
       const content = isPay ? buildPaymentContent(f) : f.content;
-      await api.post("/approvals", { doc_type: docType, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
+      const res = await api.post("/approvals", { doc_type: docType, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency });
+      const newId = res?.item?.id;
+      if (newId && files.length) {
+        for (const file of files) await api.upload(file, "approval", newId, "approval");
+      }
       onSaved();
     } catch (e: any) { alert(e.message); }
     finally { setBusy(false); }
@@ -144,10 +149,6 @@ function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "gene
           <>
             <div className="grid grid-cols-2 gap-3">
               <Field label="지급예정일"><input type="date" className="input" value={f.payDate || ""} onChange={set("payDate")} /></Field>
-              <Field label="입금은행"><input className="input" value={f.bank || ""} onChange={set("bank")} placeholder="예) 국민은행" /></Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="계좌번호"><input className="input" value={f.account || ""} onChange={set("account")} /></Field>
               <Field label="예금주"><input className="input" value={f.holder || ""} onChange={set("holder")} /></Field>
             </div>
             <Field label="지출 사유"><textarea className="input" rows={3} value={f.reason || ""} onChange={set("reason")} placeholder="지급 근거 및 상세 내역" /></Field>
@@ -157,6 +158,27 @@ function CreateModal({ docType, onClose, onSaved }: { docType: "payment" | "gene
         {!isPay && (
           <Field label="내용"><textarea className="input" rows={4} value={f.content || ""} onChange={set("content")} /></Field>
         )}
+
+        <Field label="첨부파일 (선택)">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-low p-3">
+            <label className="btn-secondary inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-xs">
+              <Icon name="upload" size={16} /> 파일 선택
+              <input type="file" multiple className="hidden"
+                onChange={(e) => { setFiles([...files, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+            </label>
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {files.map((file, i) => (
+                  <li key={i} className="flex items-center justify-between rounded-lg bg-surface-container-lowest px-2 py-1.5 text-sm">
+                    <span className="flex items-center gap-1 truncate text-slate-700"><Icon name="attach_file" size={16} /> {file.name}</span>
+                    <button type="button" className="ml-2 text-on-surface-variant hover:text-error"
+                      onClick={() => setFiles(files.filter((_, j) => j !== i))}><Icon name="close" size={16} /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Field>
 
         <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">상신 시 대표이사 결재함으로 전달되며, 대표이사 승인 시 최종 확정됩니다.</p>
         <div className="flex justify-end gap-2 pt-1">
@@ -197,6 +219,8 @@ function DetailModal({ id, role, onClose }: { id: number; role: string; onClose:
         </div>
         {a.amount != null && <div className="text-2xl font-bold text-slate-800">{a.currency} {Number(a.amount).toLocaleString()}</div>}
         {a.content && <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{a.content}</div>}
+
+        <FileManager entityType="approval" entityId={id} category="approval" label="첨부파일" />
 
         <div>
           <div className="mb-2 text-sm font-semibold text-slate-600">결재선</div>

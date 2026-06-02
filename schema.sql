@@ -125,6 +125,21 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);
 
+-- ============ 알림 / 통지 ============
+-- 결재 완료 등 이벤트 발생 시 관련 담당자에게 통지한다. read_at 이 NULL 이면 미확인.
+CREATE TABLE IF NOT EXISTS notifications (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  type          TEXT NOT NULL DEFAULT 'info',   -- approval_done | approval_rejected | info
+  title         TEXT NOT NULL,
+  body          TEXT,
+  related_type  TEXT,                            -- approval 등
+  related_id    INTEGER,
+  read_at       TEXT,                            -- NULL = 미확인
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
+
 -- ============ 원료 마스터 ============
 CREATE TABLE IF NOT EXISTS materials (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

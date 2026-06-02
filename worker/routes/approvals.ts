@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import type { Env, Variables } from "../types";
 import { authMiddleware } from "../middleware";
+import { notify } from "./notifications";
+
+const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재", weekly: "주간결산" };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use("*", authMiddleware);
@@ -115,6 +118,29 @@ app.post("/:id/action", async (c) => {
     await c.env.DB.prepare(
       "UPDATE weekly_reports SET status = ?, updated_at = datetime('now') WHERE id = ?"
     ).bind(updated.status, updated.related_id).run();
+  }
+
+  // 최종 결재 완료/반려 시 상신자(관련 담당자)에게 통지
+  if (updated && updated.status !== "pending" && updated.requester_id !== user.uid) {
+    const label = DOC_LABEL[updated.doc_type] || updated.doc_type;
+    if (updated.status === "approved") {
+      const isPay = updated.doc_type === "payment";
+      await notify(
+        c.env.DB, updated.requester_id, "approval_done",
+        isPay ? "결제완료 통지" : `${label} 승인`,
+        isPay
+          ? `「${updated.title}」 결재가 대표이사 승인으로 결제 완료되었습니다.`
+          : `「${updated.title}」 ${label} 문서가 승인되었습니다.`,
+        "approval", updated.id
+      );
+    } else if (updated.status === "rejected") {
+      await notify(
+        c.env.DB, updated.requester_id, "approval_rejected",
+        `${label} 반려`,
+        `「${updated.title}」 ${label} 문서가 반려되었습니다.${comment ? ` (사유: ${comment})` : ""}`,
+        "approval", updated.id
+      );
+    }
   }
   return c.json({ ok: true, item: updated });
 });
