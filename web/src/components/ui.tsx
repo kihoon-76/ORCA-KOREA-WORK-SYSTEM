@@ -66,14 +66,14 @@ export function Empty({ text = "데이터가 없습니다", icon = "inbox" }: { 
 
 const STATUS_STYLES: Record<string, string> = {
   todo: "bg-surface-container-highest text-on-surface-variant", in_progress: "bg-secondary-fixed text-on-secondary-container", done: "bg-success-container text-success",
-  pending: "bg-tertiary-fixed text-on-tertiary-container", approved: "bg-success-container text-success", rejected: "bg-error-container text-on-error-container",
+  pending: "bg-tertiary-fixed text-on-tertiary-container", approved: "bg-success-container text-success", rejected: "bg-error-container text-on-error-container", cancelled: "bg-surface-container-highest text-on-surface-variant",
   draft: "bg-surface-container-highest text-on-surface-variant", submitted: "bg-tertiary-fixed text-on-tertiary-container",
   contracted: "bg-surface-container-highest text-on-surface-variant", shipped: "bg-secondary-fixed text-on-secondary-container", arrived: "bg-primary-fixed text-on-primary-fixed",
   cleared: "bg-success-container text-success", planned: "bg-tertiary-fixed text-on-tertiary-container", completed: "bg-success-container text-success",
   low: "bg-surface-container-highest text-on-surface-variant", normal: "bg-surface-container-highest text-on-surface-variant", high: "bg-tertiary-fixed text-on-tertiary-container", urgent: "bg-error-container text-on-error-container",
 };
 const STATUS_LABEL: Record<string, string> = {
-  todo: "대기", in_progress: "진행중", done: "완료", pending: "결재중", approved: "승인", rejected: "반려",
+  todo: "대기", in_progress: "진행중", done: "완료", pending: "결재중", approved: "승인", rejected: "반려", cancelled: "취소됨",
   draft: "작성중", submitted: "상신완료",
   contracted: "계약", shipped: "선적", arrived: "도착", cleared: "통관/입고", planned: "예정", completed: "완료",
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급", annual: "연차", sick: "병가",

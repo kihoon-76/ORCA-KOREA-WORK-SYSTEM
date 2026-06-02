@@ -119,6 +119,41 @@ app.post("/:id/action", async (c) => {
   return c.json({ ok: true, item: updated });
 });
 
+// 상신 내용 수정 (상신자 본인, 결재중(pending) 상태에서만 — 회수 후 수정)
+app.put("/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const approval = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first<any>();
+  if (!approval) return c.json({ error: "결재 문서를 찾을 수 없습니다" }, 404);
+  if (approval.requester_id !== user.uid) return c.json({ error: "상신자만 수정할 수 있습니다" }, 403);
+  if (approval.status !== "pending") return c.json({ error: "결재중인 문서만 수정할 수 있습니다" }, 400);
+  const body = await c.req.json<any>();
+  await c.env.DB.prepare(
+    "UPDATE approvals SET title = ?, content = ?, amount = ?, currency = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(
+    body.title ?? approval.title,
+    body.content ?? approval.content,
+    body.amount ?? null,
+    body.currency || approval.currency,
+    id
+  ).run();
+  const item = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first();
+  return c.json({ ok: true, item });
+});
+
+// 상신 취소 (상신자 본인, 결재중(pending) 상태에서만 — cancelled 로 기록 남김)
+app.post("/:id/cancel", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const approval = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first<any>();
+  if (!approval) return c.json({ error: "결재 문서를 찾을 수 없습니다" }, 404);
+  if (approval.requester_id !== user.uid) return c.json({ error: "상신자만 취소할 수 있습니다" }, 403);
+  if (approval.status !== "pending") return c.json({ error: "결재중인 문서만 취소할 수 있습니다" }, 400);
+  await c.env.DB.prepare("UPDATE approvals SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").bind(id).run();
+  const item = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first();
+  return c.json({ ok: true, item });
+});
+
 app.delete("/:id", async (c) => {
   const user = c.get("user");
   const approval = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(c.req.param("id")).first<any>();
