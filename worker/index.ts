@@ -48,8 +48,8 @@ api.get("/dashboard", authMiddleware, async (c) => {
   ]);
   // 다가오는 선박 일정 (ETA 기준)
   const { results: upcoming } = await db.prepare(
-    `SELECT 'import' AS kind, id, material_name, vessel, quantity, unit, eta, status FROM imports WHERE eta >= date('now')
-     UNION ALL SELECT 'export' AS kind, id, material_name, vessel, quantity, unit, eta, status FROM exports WHERE eta >= date('now')
+    `SELECT 'import' AS kind, id, material_name, supplier AS partner, vessel, quantity, unit, eta, status FROM imports WHERE eta >= date('now')
+     UNION ALL SELECT 'export' AS kind, id, material_name, buyer AS partner, vessel, quantity, unit, eta, status FROM exports WHERE eta >= date('now')
      ORDER BY eta LIMIT 8`
   ).all();
   return c.json({

@@ -62,13 +62,14 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-outline-variant bg-surface-container-low">
-                  <tr><th className="th">구분</th><th className="th">원료명</th><th className="th">물량</th><th className="th">ETA</th></tr>
+                  <tr><th className="th">구분</th><th className="th">원료명</th><th className="th">공급사</th><th className="th">물량</th><th className="th">ETA</th></tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {data.upcoming_shipments.map((s: any, i: number) => (
                     <tr key={i} className="transition-colors hover:bg-surface-container-low">
                       <td className="td"><span className="mr-1 text-xs text-on-surface-variant">{s.kind === "import" ? "수입" : "수출"}</span><Badge value={s.status} /></td>
                       <td className="td font-bold">{s.material_name}</td>
+                      <td className="td">{s.partner || "-"}</td>
                       <td className="td">{s.quantity != null ? `${Number(s.quantity).toLocaleString()} ${s.unit || "MT"}` : "-"}</td>
                       <td className="td font-mono text-xs">{s.eta}</td>
                     </tr>
