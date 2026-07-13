@@ -141,12 +141,15 @@ function exportPaymentXlsx(title: string, d: any) {
 }
 
 function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "payment" | "general" | null; editItem?: any; onClose: () => void; onSaved: () => void }) {
+  const { user } = useAuth();
   const isEdit = !!editItem;
   const dt = editItem ? editItem.doc_type : docType;
   const isPay = dt === "payment";
   const [f, setF] = useState<any>({ currency: "KRW", category: PAY_CATEGORIES[0], method: PAY_METHODS[0] });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [viewerIds, setViewerIds] = useState<number[]>([]);
   useEffect(() => {
     if (!docType && !editItem) return;
     if (editItem) {
@@ -158,20 +161,26 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
       if (editItem.doc_type === "payment") Object.assign(base, parsePaymentContent(editItem.content || ""));
       else base.content = editItem.content || "";
       setF(base);
+      setViewerIds(Array.isArray(editItem.viewer_ids) ? editItem.viewer_ids : []);
     } else {
       setF({ currency: "KRW", category: PAY_CATEGORIES[0], method: PAY_METHODS[0] });
+      setViewerIds([]);
     }
     setFiles([]); setBusy(false);
+    api.get("/users").then((r) => setUsers(r.items || [])).catch(() => {});
   }, [docType, editItem]);
   if (!docType && !editItem) return null;
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  const toggleViewer = (id: number) => setViewerIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  // 상신자 본인·대표·관리자는 기본 열람 가능 → 지정 목록에서 제외
+  const pickableUsers = users.filter((u) => u.active !== 0 && u.id !== user!.id && u.role !== "ceo" && u.role !== "admin");
 
   const valid = isPay ? f.title && f.payee && f.amount : f.title;
   async function save() {
     setBusy(true);
     try {
       const content = isPay ? buildPaymentContent(f) : f.content;
-      const payload = { doc_type: dt, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency };
+      const payload = { doc_type: dt, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency, viewer_ids: viewerIds };
       if (isEdit) {
         await api.put(`/approvals/${editItem.id}`, payload);
       } else {
@@ -229,6 +238,24 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
           <Field label="내용"><textarea className="input" rows={4} value={f.content || ""} onChange={set("content")} /></Field>
         )}
 
+        <Field label="열람 지정 (선택)">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-low p-3">
+            <p className="mb-2 text-xs text-slate-500">지정한 사람만 이 결재 내용을 열람할 수 있습니다. (대표·관리자는 항상 열람 가능, 자금결제는 재무차장도 열람 가능)</p>
+            {pickableUsers.length === 0 ? (
+              <p className="text-xs text-slate-400">지정 가능한 직원이 없습니다.</p>
+            ) : (
+              <div className="grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
+                {pickableUsers.map((u) => (
+                  <label key={u.id} className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-sm hover:bg-surface-container">
+                    <input type="checkbox" checked={viewerIds.includes(u.id)} onChange={() => toggleViewer(u.id)} />
+                    <span className="truncate">{u.name} <span className="text-xs text-slate-400">{ROLE_LABEL[u.role] || u.role}</span></span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </Field>
+
         {!isEdit && (
           <Field label="첨부파일 (선택)">
             <div className="rounded-xl border border-outline-variant bg-surface-container-low p-3">
@@ -269,9 +296,19 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
   const [data, setData] = useState<any>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
+  const [denied, setDenied] = useState<string | null>(null);
 
-  function load() { api.get(`/approvals/${id}`).then(setData); }
+  function load() { api.get(`/approvals/${id}`).then(setData).catch((e: any) => setDenied(e.message || "열람할 수 없습니다")); }
   useEffect(load, [id]);
+
+  if (denied) return (
+    <Modal open onClose={onClose} title="열람 불가">
+      <div className="space-y-3">
+        <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">🔒 {denied}</p>
+        <div className="flex justify-end"><button className="btn-secondary" onClick={onClose}>닫기</button></div>
+      </div>
+    </Modal>
+  );
 
   async function act(action: "approve" | "reject") {
     setBusy(true);
@@ -314,6 +351,15 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
         {a.amount != null && <div className="text-2xl font-bold text-slate-800">{a.currency} {Number(a.amount).toLocaleString()}</div>}
         {a.content && <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{a.content}</div>}
 
+        {data.viewers && data.viewers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="font-semibold text-slate-500">🔒 열람 지정:</span>
+            {data.viewers.map((v: any) => (
+              <span key={v.user_id} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{v.name}</span>
+            ))}
+          </div>
+        )}
+
         <FileManager entityType="approval" entityId={id} category="approval" label="첨부파일" />
 
         <div>
@@ -335,7 +381,7 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
           <div className="flex items-center gap-2 border-t border-slate-200 pt-3">
             <span className="text-xs text-slate-500">결재중인 문서는 회수하여 수정하거나 취소할 수 있습니다.</span>
             <button className="btn-danger ml-auto" onClick={cancelReq} disabled={busy}>상신 취소</button>
-            <button className="btn-secondary" onClick={() => onEdit(a)} disabled={busy}>회수·수정</button>
+            <button className="btn-secondary" onClick={() => onEdit({ ...a, viewer_ids: data.viewer_ids || [] })} disabled={busy}>회수·수정</button>
           </div>
         )}
 

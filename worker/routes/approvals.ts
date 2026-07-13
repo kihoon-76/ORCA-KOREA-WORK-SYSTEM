@@ -13,12 +13,43 @@ const APPROVAL_FLOWS: Record<string, string[]> = {
   weekly: ["ceo"],         // 주간결산: 담당자 상신 -> 대표 승인
 };
 
+// 열람권 테이블 보장 (원격 DB 마이그레이션 없이도 동작하도록 런타임 생성)
+async function ensureViewers(db: any) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS approval_viewers (
+       approval_id INTEGER NOT NULL,
+       user_id     INTEGER NOT NULL,
+       PRIMARY KEY (approval_id, user_id)
+     )`
+  ).run();
+}
+
+// 열람 권한 판정: 전체보기/상세에서 결재 내용을 볼 수 있는가
+//  - 대표(ceo)·관리자(admin): 전체 열람
+//  - 상신자 본인 / 결재 대상 역할 / 상신자가 지정한 열람자
+//  - 재무차장(finance)이 올린 자금결제는 재무차장도 열람 가능
+function canViewApproval(
+  a: { requester_id: number; doc_type: string; requester_role?: string },
+  user: { uid: number; role: string },
+  viewerIds: Set<number>,
+  approverRoles: Set<string>
+): boolean {
+  if (user.role === "admin" || user.role === "ceo") return true;
+  if (a.requester_id === user.uid) return true;
+  if (viewerIds.has(user.uid)) return true;
+  if (approverRoles.has(user.role)) return true;
+  if (a.requester_role === "finance" && a.doc_type === "payment" && user.role === "finance") return true;
+  return false;
+}
+
 // 목록: ?inbox=1 (내가 결재할 차례) | ?mine=1 (내가 상신) | 전체
 app.get("/", async (c) => {
   const user = c.get("user");
+  await ensureViewers(c.env.DB);
   const inbox = c.req.query("inbox");
   const mine = c.req.query("mine");
-  let sql = `SELECT a.*, u.name AS requester_name FROM approvals a LEFT JOIN users u ON a.requester_id = u.id`;
+  let sql = `SELECT a.*, u.name AS requester_name, u.role AS requester_role
+             FROM approvals a LEFT JOIN users u ON a.requester_id = u.id`;
   const binds: any[] = [];
   const where: string[] = [];
   if (mine) { where.push("a.requester_id = ?"); binds.push(user.uid); }
@@ -29,6 +60,16 @@ app.get("/", async (c) => {
         AND s.step_order = a.current_step AND s.status = 'pending' AND s.approver_role = ?)`);
     binds.push(user.role);
   }
+  // 열람 권한 필터: 대표·관리자가 아니면 볼 수 있는 문서만 노출
+  if (user.role !== "admin" && user.role !== "ceo") {
+    where.push(`(
+      a.requester_id = ?
+      OR EXISTS (SELECT 1 FROM approval_viewers v WHERE v.approval_id = a.id AND v.user_id = ?)
+      OR EXISTS (SELECT 1 FROM approval_steps s2 WHERE s2.approval_id = a.id AND s2.approver_role = ?)
+      OR (u.role = 'finance' AND a.doc_type = 'payment' AND ? = 'finance')
+    )`);
+    binds.push(user.uid, user.uid, user.role, user.role);
+  }
   if (where.length) sql += " WHERE " + where.join(" AND ");
   sql += " ORDER BY a.created_at DESC";
   const { results } = await c.env.DB.prepare(sql).bind(...binds).all();
@@ -36,16 +77,29 @@ app.get("/", async (c) => {
 });
 
 app.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = c.req.param("id");
+  await ensureViewers(c.env.DB);
   const item = await c.env.DB.prepare(
-    `SELECT a.*, u.name AS requester_name FROM approvals a LEFT JOIN users u ON a.requester_id = u.id WHERE a.id = ?`
-  ).bind(id).first();
+    `SELECT a.*, u.name AS requester_name, u.role AS requester_role
+     FROM approvals a LEFT JOIN users u ON a.requester_id = u.id WHERE a.id = ?`
+  ).bind(id).first<any>();
   if (!item) return c.json({ error: "결재 문서를 찾을 수 없습니다" }, 404);
   const { results: steps } = await c.env.DB.prepare(
     `SELECT s.*, u.name AS approver_name FROM approval_steps s LEFT JOIN users u ON s.approver_id = u.id
      WHERE s.approval_id = ? ORDER BY s.step_order`
-  ).bind(id).all();
-  return c.json({ item, steps });
+  ).bind(id).all<any>();
+  const { results: viewers } = await c.env.DB.prepare(
+    `SELECT v.user_id, u.name FROM approval_viewers v LEFT JOIN users u ON v.user_id = u.id
+     WHERE v.approval_id = ?`
+  ).bind(id).all<any>();
+
+  const viewerIds = new Set<number>(viewers.map((v: any) => v.user_id));
+  const approverRoles = new Set<string>(steps.map((s: any) => s.approver_role));
+  if (!canViewApproval(item, user, viewerIds, approverRoles)) {
+    return c.json({ error: "이 결재 문서를 열람할 권한이 없습니다" }, 403);
+  }
+  return c.json({ item, steps, viewers, viewer_ids: [...viewerIds] });
 });
 
 // 상신
@@ -55,6 +109,7 @@ app.post("/", async (c) => {
   const docType = body.doc_type || "payment";
   const flow = APPROVAL_FLOWS[docType] || APPROVAL_FLOWS.general;
 
+  await ensureViewers(c.env.DB);
   const res = await c.env.DB.prepare(
     `INSERT INTO approvals (doc_type, title, content, amount, currency, requester_id, related_type, related_id, status, current_step)
      VALUES (?,?,?,?,?,?,?,?, 'pending', 1)`
@@ -69,9 +124,20 @@ app.post("/", async (c) => {
       "INSERT INTO approval_steps (approval_id, step_order, approver_role, status) VALUES (?,?,?, 'pending')"
     ).bind(approvalId, i + 1, flow[i]).run();
   }
+  await setViewers(c.env.DB, approvalId as number, body.viewer_ids, user.uid);
   const item = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(approvalId).first();
   return c.json({ ok: true, item });
 });
+
+// 열람 지정자 저장(기존 지정 대체). 상신자 본인은 항상 열람 가능하므로 목록에서 제외.
+async function setViewers(db: any, approvalId: number, viewerIds: any, requesterId: number) {
+  await db.prepare("DELETE FROM approval_viewers WHERE approval_id = ?").bind(approvalId).run();
+  if (!Array.isArray(viewerIds)) return;
+  const uniq = [...new Set(viewerIds.map((v: any) => Number(v)).filter((v: number) => v && v !== requesterId))];
+  for (const uid of uniq) {
+    await db.prepare("INSERT OR IGNORE INTO approval_viewers (approval_id, user_id) VALUES (?,?)").bind(approvalId, uid).run();
+  }
+}
 
 // 결재 처리 (승인/반려)
 app.post("/:id/action", async (c) => {
@@ -137,6 +203,10 @@ app.put("/:id", async (c) => {
     body.currency || approval.currency,
     id
   ).run();
+  if (body.viewer_ids !== undefined) {
+    await ensureViewers(c.env.DB);
+    await setViewers(c.env.DB, Number(id), body.viewer_ids, approval.requester_id);
+  }
   const item = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(id).first();
   return c.json({ ok: true, item });
 });
@@ -159,6 +229,7 @@ app.delete("/:id", async (c) => {
   const approval = await c.env.DB.prepare("SELECT * FROM approvals WHERE id = ?").bind(c.req.param("id")).first<any>();
   if (!approval) return c.json({ error: "없음" }, 404);
   if (approval.requester_id !== user.uid && user.role !== "admin") return c.json({ error: "권한 없음" }, 403);
+  await c.env.DB.prepare("DELETE FROM approval_viewers WHERE approval_id = ?").bind(c.req.param("id")).run();
   await c.env.DB.prepare("DELETE FROM approvals WHERE id = ?").bind(c.req.param("id")).run();
   return c.json({ ok: true });
 });
