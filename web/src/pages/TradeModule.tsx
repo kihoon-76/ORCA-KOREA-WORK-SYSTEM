@@ -17,6 +17,18 @@ export default function TradeModule({ config }: { config: Config }) {
   const { items, loading, reload } = useList<any>(config.endpoint);
   const [open, setOpen] = useState(false);
   const [row, setRow] = useState<any>(null);
+  const [lcFilter, setLcFilter] = useState<string>(""); // "" = 전체
+
+  // LC개설회사 목록(엑셀 필터) — lc_bank 기준 중복 제거 + 건수
+  const lcBanks = Array.from(
+    items.reduce((m: Map<string, number>, r: any) => {
+      const k = (r.lc_bank || "").trim();
+      if (k) m.set(k, (m.get(k) || 0) + 1);
+      return m;
+    }, new Map<string, number>())
+  ).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+
+  const filtered = lcFilter ? items.filter((r: any) => (r.lc_bank || "").trim() === lcFilter) : items;
 
   function openNew() { setRow({ status: config.statusOptions[0].v, unit: "MT", currency: "USD" }); setOpen(true); }
   function openEdit(r: any) { setRow({ ...r }); setOpen(true); }
@@ -45,7 +57,29 @@ export default function TradeModule({ config }: { config: Config }) {
       <PageHeader title={config.title} subtitle={config.subtitle}
         action={<button className="btn-primary" onClick={openNew}>+ 신규 등록</button>} />
       {loading ? <Spinner /> : items.length === 0 ? <Empty /> : (
-        <div className="card overflow-x-auto">
+        <div className="card">
+          {lcBanks.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
+              <label className="text-sm font-medium text-slate-600">LC개설회사</label>
+              <select
+                className="input max-w-xs"
+                value={lcFilter}
+                onChange={(e) => setLcFilter(e.target.value)}
+              >
+                <option value="">전체 ({items.length}건)</option>
+                {lcBanks.map(([name, count]) => (
+                  <option key={name} value={name}>{name} ({count}건)</option>
+                ))}
+              </select>
+              {lcFilter && (
+                <button className="text-xs text-brand-600 hover:underline" onClick={() => setLcFilter("")}>
+                  필터 해제
+                </button>
+              )}
+              <span className="ml-auto text-xs text-slate-400">{filtered.length}건 표시</span>
+            </div>
+          )}
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
             <thead><tr className="bg-slate-50">
               <th className="th">관리번호</th><th className="th">원료명</th><th className="th">{config.partnerLabel}</th>
@@ -53,7 +87,9 @@ export default function TradeModule({ config }: { config: Config }) {
               <th className="th">선박/ETD·ETA</th><th className="th">상태</th><th className="th"></th>
             </tr></thead>
             <tbody>
-              {items.map((r) => (
+              {filtered.length === 0 ? (
+                <tr><td className="td text-center text-slate-400" colSpan={9}>해당 LC개설회사의 데이터가 없습니다</td></tr>
+              ) : filtered.map((r) => (
                 <tr key={r.id}>
                   <td className="td">{r.ref_no || "-"}</td>
                   <td className="td font-medium">{r.material_name}</td>
@@ -74,6 +110,7 @@ export default function TradeModule({ config }: { config: Config }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
