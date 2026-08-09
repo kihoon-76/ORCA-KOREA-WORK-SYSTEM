@@ -3,17 +3,28 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { Spinner, Icon, Badge } from "../components/ui";
+import { ApprovalCreateModal, ApprovalDetailModal } from "./Approvals";
+import { parseTripReportContent, tripPeriod } from "../tripReport";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [stock, setStock] = useState<any[]>([]);
   const [inbox, setInbox] = useState<any[]>([]);
+  // 출장결과보고: 누구나 기안 → 대표이사 최종결재 (재무차장 자동 열람)
+  const [tripReports, setTripReports] = useState<any[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
+  function loadTripReports() {
+    api.get("/approvals?doc_type=trip_report&limit=6").then((r) => setTripReports(r.items || [])).catch(() => {});
+  }
   useEffect(() => {
     api.get("/dashboard").then(setData);
     api.get("/inventory").then((r) => setStock(r.items || []));
     api.get("/approvals?inbox=1").then((r) => setInbox(r.items || []));
+    loadTripReports();
   }, []);
   if (!data) return <Spinner />;
 
@@ -103,6 +114,58 @@ export default function Dashboard() {
           <Link to="/inventory" className="mt-6 border-t border-outline-variant pt-4 text-center text-xs text-secondary hover:underline">재고관리 바로가기</Link>
         </div>
       </div>
+
+      {/* 출장결과보고 결재 */}
+      <div className="card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant px-6 py-4">
+          <div>
+            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="flight_takeoff" className="text-secondary" /> 출장결과보고 결재</h3>
+            <p className="mt-0.5 text-xs text-on-surface-variant">누구나 기안 · 대표이사 최종결재 · 재무차장 자동 열람 (참조 지정 가능)</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="btn-primary" onClick={() => setCreating(true)}>+ 출장결과보고 기안</button>
+            <Link to="/approvals" className="text-sm font-semibold text-secondary hover:underline">전체보기</Link>
+          </div>
+        </div>
+        {tripReports.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-on-surface-variant">기안된 출장결과보고가 없습니다</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px]">
+              <thead className="border-b border-outline-variant bg-surface-container-low">
+                <tr><th className="th">제목</th><th className="th">기안자</th><th className="th">출장지</th><th className="th">출장기간</th><th className="th">출장비용</th><th className="th">상태</th><th className="th"></th></tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant">
+                {tripReports.map((t) => {
+                  const p = parseTripReportContent(t.content || "");
+                  return (
+                    <tr key={t.id} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setDetailId(t.id)}>
+                      <td className="td font-bold">{t.title}</td>
+                      <td className="td">{t.requester_name}</td>
+                      <td className="td">{p.destination || "-"}</td>
+                      <td className="td font-mono text-xs">{tripPeriod(p) || "-"}</td>
+                      <td className="td">{t.amount != null ? `${t.currency} ${Number(t.amount).toLocaleString()}` : "-"}</td>
+                      <td className="td"><Badge value={t.status} /></td>
+                      <td className="td text-right"><Icon name="chevron_right" className="text-on-surface-variant" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {(creating || editItem) && (
+        <ApprovalCreateModal docType="trip_report" editItem={editItem}
+          onClose={() => { setCreating(false); setEditItem(null); }}
+          onSaved={() => { setCreating(false); setEditItem(null); loadTripReports(); }} />
+      )}
+      {detailId !== null && (
+        <ApprovalDetailModal id={detailId} role={user!.role} meId={user!.id}
+          onClose={() => { setDetailId(null); loadTripReports(); }}
+          onEdit={(item) => { setDetailId(null); setEditItem({ ...item, viewer_ids: item.viewer_ids || [] }); }} />
+      )}
 
       {/* Bottom: approval queue + quick links */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -10,7 +10,13 @@ const APPROVAL_FLOWS: Record<string, string[]> = {
   payment: ["ceo"],        // 자금결제: 재무차장 상신 -> 대표 승인
   general: ["ceo"],        // 일반 결재
   trip: ["ceo"],           // 출장 결재
+  trip_report: ["ceo"],    // 출장결과보고: 누구나 기안 -> 대표 승인 (재무차장 자동 열람)
   weekly: ["ceo"],         // 주간결산: 담당자 상신 -> 대표 승인
+};
+
+// 문서 유형별 자동 열람 역할 (상신자가 지정하지 않아도 항상 열람 가능한 역할)
+const AUTO_VIEWER_ROLES: Record<string, string[]> = {
+  trip_report: ["finance"],  // 출장결과보고는 출장비 정산을 위해 재무차장이 자동 열람
 };
 
 // 열람권 테이블 보장 (원격 DB 마이그레이션 없이도 동작하도록 런타임 생성)
@@ -26,7 +32,8 @@ async function ensureViewers(db: any) {
 
 // 열람 권한 판정: 전체보기/상세에서 결재 내용을 볼 수 있는가
 //  - 대표(ceo)·관리자(admin): 전체 열람
-//  - 상신자 본인 / 결재 대상 역할 / 상신자가 지정한 열람자
+//  - 상신자 본인 / 결재 대상 역할 / 상신자가 지정한 참조자
+//  - 문서 유형별 자동 열람 역할 (출장결과보고 → 재무차장)
 //  - 재무차장(finance)이 올린 자금결제는 재무차장도 열람 가능
 function canViewApproval(
   a: { requester_id: number; doc_type: string; requester_role?: string },
@@ -38,21 +45,30 @@ function canViewApproval(
   if (a.requester_id === user.uid) return true;
   if (viewerIds.has(user.uid)) return true;
   if (approverRoles.has(user.role)) return true;
+  if ((AUTO_VIEWER_ROLES[a.doc_type] || []).includes(user.role)) return true;
   if (a.requester_role === "finance" && a.doc_type === "payment" && user.role === "finance") return true;
   return false;
 }
 
-// 목록: ?inbox=1 (내가 결재할 차례) | ?mine=1 (내가 상신) | 전체
+// 현재 사용자가 자동 열람 역할인 문서 유형 목록 (목록 조회 필터용)
+function autoViewableDocTypes(role: string): string[] {
+  return Object.keys(AUTO_VIEWER_ROLES).filter((dt) => AUTO_VIEWER_ROLES[dt].includes(role));
+}
+
+// 목록: ?inbox=1 (내가 결재할 차례) | ?mine=1 (내가 상신) | ?doc_type= (유형 필터) | ?limit= | 전체
 app.get("/", async (c) => {
   const user = c.get("user");
   await ensureViewers(c.env.DB);
   const inbox = c.req.query("inbox");
   const mine = c.req.query("mine");
+  const docType = c.req.query("doc_type");
+  const limit = Math.min(Math.max(Number(c.req.query("limit")) || 0, 0), 200);
   let sql = `SELECT a.*, u.name AS requester_name, u.role AS requester_role
              FROM approvals a LEFT JOIN users u ON a.requester_id = u.id`;
   const binds: any[] = [];
   const where: string[] = [];
   if (mine) { where.push("a.requester_id = ?"); binds.push(user.uid); }
+  if (docType) { where.push("a.doc_type = ?"); binds.push(docType); }
   if (inbox) {
     // 내 역할이 현재 단계의 결재 역할이고, 아직 pending 인 건
     where.push(`a.status = 'pending' AND EXISTS (
@@ -62,16 +78,20 @@ app.get("/", async (c) => {
   }
   // 열람 권한 필터: 대표·관리자가 아니면 볼 수 있는 문서만 노출
   if (user.role !== "admin" && user.role !== "ceo") {
+    // 자동 열람 역할인 문서 유형 (예: 재무차장 → 출장결과보고)
+    const autoTypes = autoViewableDocTypes(user.role);
+    const autoClause = autoTypes.length ? ` OR a.doc_type IN (${autoTypes.map(() => "?").join(",")})` : "";
     where.push(`(
       a.requester_id = ?
       OR EXISTS (SELECT 1 FROM approval_viewers v WHERE v.approval_id = a.id AND v.user_id = ?)
       OR EXISTS (SELECT 1 FROM approval_steps s2 WHERE s2.approval_id = a.id AND s2.approver_role = ?)
-      OR (u.role = 'finance' AND a.doc_type = 'payment' AND ? = 'finance')
+      OR (u.role = 'finance' AND a.doc_type = 'payment' AND ? = 'finance')${autoClause}
     )`);
-    binds.push(user.uid, user.uid, user.role, user.role);
+    binds.push(user.uid, user.uid, user.role, user.role, ...autoTypes);
   }
   if (where.length) sql += " WHERE " + where.join(" AND ");
   sql += " ORDER BY a.created_at DESC";
+  if (limit > 0) { sql += " LIMIT ?"; binds.push(limit); }
   const { results } = await c.env.DB.prepare(sql).bind(...binds).all();
   return c.json({ items: results });
 });
@@ -99,7 +119,10 @@ app.get("/:id", async (c) => {
   if (!canViewApproval(item, user, viewerIds, approverRoles)) {
     return c.json({ error: "이 결재 문서를 열람할 권한이 없습니다" }, 403);
   }
-  return c.json({ item, steps, viewers, viewer_ids: [...viewerIds] });
+  return c.json({
+    item, steps, viewers, viewer_ids: [...viewerIds],
+    auto_viewer_roles: AUTO_VIEWER_ROLES[item.doc_type] || [],
+  });
 });
 
 // 상신

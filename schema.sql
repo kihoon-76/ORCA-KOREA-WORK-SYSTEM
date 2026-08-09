@@ -65,9 +65,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 
 -- ============ 결재 (자금결제 등) ============
 -- 워크플로우: 재무차장(finance) 상신 -> 대표(ceo) 승인 시 확정
+-- 출장결과보고(trip_report): 누구나 기안 -> 대표(ceo) 최종승인, 재무차장은 자동 열람
 CREATE TABLE IF NOT EXISTS approvals (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  doc_type      TEXT NOT NULL DEFAULT 'payment', -- payment | general | trip
+  doc_type      TEXT NOT NULL DEFAULT 'payment', -- payment | general | trip | trip_report | weekly
   title         TEXT NOT NULL,
   content       TEXT,
   amount        REAL,                            -- 금액 (자금결제)
@@ -92,9 +93,9 @@ CREATE TABLE IF NOT EXISTS approval_steps (
   acted_at      TEXT
 );
 
--- 열람 권한: 상신자가 지정한 사용자는 해당 결재 내용을 열람할 수 있다.
--- (기본 열람권: 대표(ceo)·관리자(admin)는 전체, 재무차장(finance)은 재무차장이 올린 자금결제,
---  상신자 본인, 결재 대상 역할, 그리고 아래 지정된 사용자)
+-- 열람 권한(참조): 상신자가 지정한 사용자는 해당 결재 내용을 열람할 수 있다.
+-- (기본 열람권: 대표(ceo)·관리자(admin)는 전체, 재무차장(finance)은 재무차장이 올린 자금결제와
+--  출장결과보고(trip_report) 전체, 상신자 본인, 결재 대상 역할, 그리고 아래 지정된 참조자)
 CREATE TABLE IF NOT EXISTS approval_viewers (
   approval_id   INTEGER NOT NULL REFERENCES approvals(id) ON DELETE CASCADE,
   user_id       INTEGER NOT NULL REFERENCES users(id),

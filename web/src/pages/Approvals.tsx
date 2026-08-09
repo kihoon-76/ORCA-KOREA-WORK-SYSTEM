@@ -3,15 +3,20 @@ import { api } from "../api";
 import { useAuth, ROLE_LABEL } from "../auth";
 import { PageHeader, Spinner, Empty, Modal, Field, Badge, Icon, FileManager } from "../components/ui";
 import { downloadXlsx } from "../xlsx";
+import { buildTripReportContent, parseTripReportContent, exportTripReportXlsx } from "../tripReport";
 
-const DOC_LABEL: Record<string, string> = { payment: "자금결제", general: "일반결재", trip: "출장결재", weekly: "주간결산" };
+export const DOC_LABEL: Record<string, string> = {
+  payment: "자금결제", general: "일반결재", trip: "출장결재", trip_report: "출장결과보고", weekly: "주간결산",
+};
+
+export type DocType = "payment" | "general" | "trip_report";
 
 export default function Approvals() {
   const { user } = useAuth();
   const [tab, setTab] = useState<"inbox" | "mine" | "all">(user!.role === "ceo" ? "inbox" : "mine");
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createType, setCreateType] = useState<"payment" | "general" | null>(null);
+  const [createType, setCreateType] = useState<DocType | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
 
@@ -23,19 +28,21 @@ export default function Approvals() {
   useEffect(load, [tab]);
 
   // 자금결제 상신은 재무차장(finance)·관리자 또는 재무팀 소속, 일반결제 상신은 모든 직원
+  // 출장결과보고는 직급/부서 제한 없이 누구나 기안한다.
   const inFinanceDept = (user!.department || "").includes("재무");
   const canRequestPayment = user!.role === "finance" || user!.role === "admin" || inFinanceDept;
   const canRequestGeneral = user!.role !== "ceo";
 
   return (
     <div>
-      <PageHeader title="전자결재" subtitle="자금결제: 재무차장 상신 → 대표이사 승인"
-        action={(canRequestPayment || canRequestGeneral) ? (
-          <div className="flex gap-2">
+      <PageHeader title="전자결재" subtitle="자금결제: 재무차장 상신 → 대표이사 승인 / 출장결과보고: 누구나 기안 → 대표이사 승인"
+        action={(
+          <div className="flex flex-wrap gap-2">
             {canRequestPayment && <button className="btn-primary" onClick={() => setCreateType("payment")}>+ 자금결제 상신</button>}
+            <button className="btn-primary" onClick={() => setCreateType("trip_report")}>+ 출장결과보고 기안</button>
             {canRequestGeneral && <button className="btn-secondary" onClick={() => setCreateType("general")}>+ 일반결제 상신</button>}
           </div>
-        ) : undefined} />
+        )} />
 
       <div className="mb-4 flex gap-1 rounded-lg bg-slate-200 p-1 text-sm w-fit">
         {[["inbox", "결재함"], ["mine", "내 상신함"], ["all", "전체"]].map(([k, l]) => (
@@ -68,10 +75,10 @@ export default function Approvals() {
         </div>
       )}
 
-      <CreateModal docType={createType} editItem={editItem}
+      <ApprovalCreateModal docType={createType} editItem={editItem}
         onClose={() => { setCreateType(null); setEditItem(null); }}
         onSaved={() => { setCreateType(null); setEditItem(null); load(); }} />
-      {detail && <DetailModal id={detail.id} role={user!.role} meId={user!.id}
+      {detail && <ApprovalDetailModal id={detail.id} role={user!.role} meId={user!.id}
         onClose={() => { setDetail(null); load(); }}
         onEdit={(item) => { setDetail(null); setEditItem(item); }} />}
     </div>
@@ -140,11 +147,12 @@ function exportPaymentXlsx(title: string, d: any) {
   downloadXlsx(paymentFilename(title), "자금결제", "자금결제 상신서", paymentRows(d));
 }
 
-function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "payment" | "general" | null; editItem?: any; onClose: () => void; onSaved: () => void }) {
+export function ApprovalCreateModal({ docType, editItem, onClose, onSaved }: { docType: DocType | null; editItem?: any; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
   const isEdit = !!editItem;
   const dt = editItem ? editItem.doc_type : docType;
   const isPay = dt === "payment";
+  const isTripReport = dt === "trip_report";
   const [f, setF] = useState<any>({ currency: "KRW", category: PAY_CATEGORIES[0], method: PAY_METHODS[0] });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -159,6 +167,7 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
         category: PAY_CATEGORIES[0], method: PAY_METHODS[0],
       };
       if (editItem.doc_type === "payment") Object.assign(base, parsePaymentContent(editItem.content || ""));
+      else if (editItem.doc_type === "trip_report") Object.assign(base, parseTripReportContent(editItem.content || ""));
       else base.content = editItem.content || "";
       setF(base);
       setViewerIds(Array.isArray(editItem.viewer_ids) ? editItem.viewer_ids : []);
@@ -175,11 +184,13 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
   // 상신자 본인·대표·관리자는 기본 열람 가능 → 지정 목록에서 제외
   const pickableUsers = users.filter((u) => u.active !== 0 && u.id !== user!.id && u.role !== "ceo" && u.role !== "admin");
 
-  const valid = isPay ? f.title && f.payee && f.amount : f.title;
+  const valid = isPay ? f.title && f.payee && f.amount
+    : isTripReport ? f.title && f.destination && f.startDate
+    : f.title;
   async function save() {
     setBusy(true);
     try {
-      const content = isPay ? buildPaymentContent(f) : f.content;
+      const content = isPay ? buildPaymentContent(f) : isTripReport ? buildTripReportContent(f) : f.content;
       const payload = { doc_type: dt, title: f.title, content, amount: f.amount ? Number(f.amount) : null, currency: f.currency, viewer_ids: viewerIds };
       if (isEdit) {
         await api.put(`/approvals/${editItem.id}`, payload);
@@ -194,12 +205,34 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
     } catch (e: any) { alert(e.message); }
     finally { setBusy(false); }
   }
-  function exportExcel() { exportPaymentXlsx(f.title, f); }
+  function exportExcel() {
+    if (isTripReport) exportTripReportXlsx(f.title, f);
+    else exportPaymentXlsx(f.title, f);
+  }
+
+  const docTitle = isPay ? "자금결제 상신" : isTripReport ? "출장결과보고 기안" : "일반결제 상신";
+  const titlePlaceholder = isPay ? "예) 2026년 6월 자재대금 지급"
+    : isTripReport ? "예) 인도네시아 팜유 공급사 실사 출장결과보고" : "결재 제목";
 
   return (
-    <Modal open onClose={onClose} title={(isEdit ? "수정 · " : "") + (isPay ? "자금결제 상신" : "일반결제 상신")} wide={isPay}>
+    <Modal open onClose={onClose} title={(isEdit ? "수정 · " : "") + docTitle} wide={isPay || isTripReport}>
       <div className="space-y-3">
-        <Field label="제목"><input className="input" value={f.title || ""} onChange={set("title")} placeholder={isPay ? "예) 2026년 6월 자재대금 지급" : "결재 제목"} /></Field>
+        <Field label="제목"><input className="input" value={f.title || ""} onChange={set("title")} placeholder={titlePlaceholder} /></Field>
+
+        {isTripReport && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="출장지"><input className="input" value={f.destination || ""} onChange={set("destination")} placeholder="예) 인도네시아 자카르타" /></Field>
+              <Field label="방문처 / 면담자"><input className="input" value={f.counterpart || ""} onChange={set("counterpart")} placeholder="예) PT. ABC / 구매팀장" /></Field>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="출장 시작일"><input type="date" className="input" value={f.startDate || ""} onChange={set("startDate")} /></Field>
+              <Field label="출장 종료일"><input type="date" className="input" value={f.endDate || ""} onChange={set("endDate")} /></Field>
+              <Field label="동행자"><input className="input" value={f.companions || ""} onChange={set("companions")} placeholder="예) 홍길동 과장" /></Field>
+            </div>
+            <Field label="출장 목적"><textarea className="input" rows={2} value={f.purpose || ""} onChange={set("purpose")} placeholder="출장 목적을 작성하세요" /></Field>
+          </>
+        )}
 
         {isPay && (
           <>
@@ -220,9 +253,17 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
         )}
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2"><Field label="금액"><input type="text" inputMode="numeric" className="input" value={f.amount ? Number(f.amount).toLocaleString() : ""} onChange={(e) => setF({ ...f, amount: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" /></Field></div>
+          <div className="col-span-2"><Field label={isTripReport ? "출장비용 (선택)" : "금액"}><input type="text" inputMode="numeric" className="input" value={f.amount ? Number(f.amount).toLocaleString() : ""} onChange={(e) => setF({ ...f, amount: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" /></Field></div>
           <Field label="통화"><input className="input" value={f.currency} onChange={set("currency")} /></Field>
         </div>
+
+        {isTripReport && (
+          <>
+            <Field label="주요 활동 및 협의내용"><textarea className="input" rows={4} value={f.activities || ""} onChange={set("activities")} placeholder="일자별 방문·면담·협의 내용을 작성하세요" /></Field>
+            <Field label="성과 및 결론"><textarea className="input" rows={3} value={f.results || ""} onChange={set("results")} placeholder="출장 성과와 결론을 작성하세요" /></Field>
+            <Field label="후속 조치사항"><textarea className="input" rows={2} value={f.followup || ""} onChange={set("followup")} placeholder="향후 진행할 후속 업무를 작성하세요" /></Field>
+          </>
+        )}
 
         {isPay && (
           <>
@@ -234,13 +275,17 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
           </>
         )}
 
-        {!isPay && (
+        {!isPay && !isTripReport && (
           <Field label="내용"><textarea className="input" rows={4} value={f.content || ""} onChange={set("content")} /></Field>
         )}
 
-        <Field label="열람 지정 (선택)">
+        <Field label={isTripReport ? "참조 지정 (선택)" : "열람 지정 (선택)"}>
           <div className="rounded-xl border border-outline-variant bg-surface-container-low p-3">
-            <p className="mb-2 text-xs text-slate-500">지정한 사람만 이 결재 내용을 열람할 수 있습니다. (대표·관리자는 항상 열람 가능, 자금결제는 재무차장도 열람 가능)</p>
+            <p className="mb-2 text-xs text-slate-500">
+              {isTripReport
+                ? "참조로 지정한 사람은 이 출장결과보고를 열람할 수 있습니다. (대표·관리자는 항상 열람 가능, 재무차장은 출장비 정산을 위해 자동 열람)"
+                : "지정한 사람만 이 결재 내용을 열람할 수 있습니다. (대표·관리자는 항상 열람 가능, 자금결제는 재무차장도 열람 가능)"}
+            </p>
             {pickableUsers.length === 0 ? (
               <p className="text-xs text-slate-400">지정 가능한 직원이 없습니다.</p>
             ) : (
@@ -280,19 +325,21 @@ function CreateModal({ docType, editItem, onClose, onSaved }: { docType: "paymen
         )}
 
         <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          {isEdit ? "수정 내용은 결재중인 동안에만 저장됩니다. 대표이사 승인/반려 후에는 수정할 수 없습니다." : "상신 시 대표이사 결재함으로 전달되며, 대표이사 승인 시 최종 확정됩니다."}
+          {isEdit ? "수정 내용은 결재중인 동안에만 저장됩니다. 대표이사 승인/반려 후에는 수정할 수 없습니다."
+            : isTripReport ? "기안 시 대표이사 결재함으로 전달되며, 대표이사가 최종 결재합니다. 재무차장에게는 자동으로 열람 권한이 부여됩니다."
+            : "상신 시 대표이사 결재함으로 전달되며, 대표이사 승인 시 최종 확정됩니다."}
         </p>
         <div className="flex justify-end gap-2 pt-1">
-          {isPay && <button className="btn-secondary mr-auto" onClick={exportExcel} disabled={!f.title}>📊 엑셀 저장</button>}
+          {(isPay || isTripReport) && <button className="btn-secondary mr-auto" onClick={exportExcel} disabled={!f.title}>📊 엑셀 저장</button>}
           <button className="btn-secondary" onClick={onClose}>{isEdit ? "닫기" : "취소"}</button>
-          <button className="btn-primary" onClick={save} disabled={!valid || busy}>{isEdit ? "수정 저장" : "상신"}</button>
+          <button className="btn-primary" onClick={save} disabled={!valid || busy}>{isEdit ? "수정 저장" : isTripReport ? "기안" : "상신"}</button>
         </div>
       </div>
     </Modal>
   );
 }
 
-function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: string; meId: number; onClose: () => void; onEdit: (item: any) => void }) {
+export function ApprovalDetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: string; meId: number; onClose: () => void; onEdit: (item: any) => void }) {
   const [data, setData] = useState<any>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -330,12 +377,14 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
   const canAct = a.status === "pending" && currentStep && currentStep.approver_role === role;
   const isMine = a.requester_id === meId;
   const canEdit = a.status === "pending" && isMine;
+  const isTripReport = a.doc_type === "trip_report";
+  const meta = { status: a.status, requester: a.requester_name, createdAt: (a.created_at || "").slice(0, 10) };
   function exportExcel() {
-    const p = parsePaymentContent(a.content || "");
-    exportPaymentXlsx(a.title, {
-      title: a.title, amount: a.amount, currency: a.currency, ...p,
-      status: a.status, requester: a.requester_name, createdAt: (a.created_at || "").slice(0, 10),
-    });
+    if (isTripReport) {
+      exportTripReportXlsx(a.title, { title: a.title, amount: a.amount, currency: a.currency, ...parseTripReportContent(a.content || ""), ...meta });
+      return;
+    }
+    exportPaymentXlsx(a.title, { title: a.title, amount: a.amount, currency: a.currency, ...parsePaymentContent(a.content || ""), ...meta });
   }
 
   return (
@@ -343,19 +392,27 @@ function DetailModal({ id, role, meId, onClose, onEdit }: { id: number; role: st
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Badge value={a.status} />
-          <span className="text-sm text-slate-500">{DOC_LABEL[a.doc_type] || a.doc_type} · 상신: {a.requester_name}</span>
-          {a.doc_type === "payment" && isMine && (
+          <span className="text-sm text-slate-500">{DOC_LABEL[a.doc_type] || a.doc_type} · {isTripReport ? "기안" : "상신"}: {a.requester_name}</span>
+          {((a.doc_type === "payment" && isMine) || isTripReport) && (
             <button className="btn-secondary ml-auto text-xs" onClick={exportExcel}>📊 엑셀 저장</button>
           )}
         </div>
-        {a.amount != null && <div className="text-2xl font-bold text-slate-800">{a.currency} {Number(a.amount).toLocaleString()}</div>}
+        {a.amount != null && (
+          <div className="text-2xl font-bold text-slate-800">
+            {isTripReport && <span className="mr-2 align-middle text-sm font-semibold text-slate-500">출장비용</span>}
+            {a.currency} {Number(a.amount).toLocaleString()}
+          </div>
+        )}
         {a.content && <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{a.content}</div>}
 
-        {data.viewers && data.viewers.length > 0 && (
+        {((data.viewers && data.viewers.length > 0) || (data.auto_viewer_roles || []).length > 0) && (
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-semibold text-slate-500">🔒 열람 지정:</span>
-            {data.viewers.map((v: any) => (
+            <span className="font-semibold text-slate-500">🔒 {isTripReport ? "참조" : "열람 지정"}:</span>
+            {(data.viewers || []).map((v: any) => (
               <span key={v.user_id} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{v.name}</span>
+            ))}
+            {(data.auto_viewer_roles || []).map((r: string) => (
+              <span key={r} className="rounded-full bg-secondary-fixed px-2 py-0.5 text-on-secondary-container">{ROLE_LABEL[r] || r} <span className="opacity-70">(자동)</span></span>
             ))}
           </div>
         )}
