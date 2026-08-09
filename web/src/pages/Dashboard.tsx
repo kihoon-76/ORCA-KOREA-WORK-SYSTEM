@@ -124,7 +124,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             <button className="btn-primary" onClick={() => setCreating(true)}>+ 출장결과보고 기안</button>
-            <Link to="/approvals" className="text-sm font-semibold text-secondary hover:underline">전체보기</Link>
+            <Link to="/trip-reports" className="text-sm font-semibold text-secondary hover:underline">전체보기</Link>
           </div>
         </div>
         {tripReports.length === 0 ? (
@@ -199,6 +199,7 @@ export default function Dashboard() {
               { to: "/approvals", label: "자금결제 상신", icon: "approval" },
               { to: "/materials", label: "분석결과 등록", icon: "science" },
               { to: "/trips", label: "출장계획서", icon: "flight" },
+              { to: "/trip-reports", label: "출장결과보고", icon: "flight_takeoff" },
               { to: "/attendance", label: "출퇴근 체크", icon: "schedule" },
             ].map((q) => (
               <Link key={q.to} to={q.to} className="flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 transition-colors hover:bg-surface-container">

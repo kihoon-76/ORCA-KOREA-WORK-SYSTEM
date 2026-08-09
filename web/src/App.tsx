@@ -16,6 +16,7 @@ import Exports from "./pages/Exports";
 import Inventory from "./pages/Inventory";
 import Materials from "./pages/Materials";
 import Trips from "./pages/Trips";
+import TripReports from "./pages/TripReports";
 import Users from "./pages/Users";
 import Chat from "./pages/Chat";
 import Meetings from "./pages/Meetings";
@@ -28,6 +29,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
     { to: "/approvals", label: "전자결재", icon: "approval" },
+    { to: "/trip-reports", label: "출장결과보고", icon: "flight_takeoff" },
     { to: "/weekly", label: "주간결산 보고", icon: "event_note" },
   ]},
   { group: "Communication", items: [
@@ -157,6 +159,7 @@ export default function App() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/approvals" element={<Approvals />} />
+        <Route path="/trip-reports" element={<TripReports />} />
         <Route path="/weekly" element={<WeeklyReports />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/meetings" element={<Meetings />} />
