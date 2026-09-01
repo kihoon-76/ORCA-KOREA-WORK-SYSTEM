@@ -73,7 +73,7 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-outline-variant bg-surface-container-low">
-                  <tr><th className="th">구분</th><th className="th">원료명</th><th className="th">공급사</th><th className="th">물량</th><th className="th">ETA</th></tr>
+                  <tr><th className="th">구분</th><th className="th">원료명</th><th className="th">공급사</th><th className="th">물량</th><th className="th">ETD</th><th className="th">ETA</th><th className="th">LC개설</th></tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {data.upcoming_shipments.map((s: any, i: number) => (
@@ -82,7 +82,9 @@ export default function Dashboard() {
                       <td className="td font-bold">{s.material_name}</td>
                       <td className="td">{s.partner || "-"}</td>
                       <td className="td">{s.quantity != null ? `${Number(s.quantity).toLocaleString()} ${s.unit || "MT"}` : "-"}</td>
+                      <td className="td font-mono text-xs">{s.etd || "-"}</td>
                       <td className="td font-mono text-xs">{s.eta}</td>
+                      <td className="td">{s.lc_bank || "-"}{s.lc_no ? <div className="text-xs text-on-surface-variant">{s.lc_no}</div> : null}</td>
                     </tr>
                   ))}
                 </tbody>
