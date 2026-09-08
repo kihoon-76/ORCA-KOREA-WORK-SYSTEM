@@ -135,6 +135,16 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);
 
+-- ============ 파일함 / 회사 공용 드라이브 (attachments를 entity_type='drive_folder'로 공용 사용) ============
+CREATE TABLE IF NOT EXISTS drive_folders (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  parent_id     INTEGER REFERENCES drive_folders(id), -- NULL = 최상위(루트)
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_drive_folders_parent ON drive_folders(parent_id);
+
 -- ============ 원료 마스터 ============
 CREATE TABLE IF NOT EXISTS materials (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

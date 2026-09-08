@@ -20,6 +20,7 @@ import TripReports from "./pages/TripReports";
 import Users from "./pages/Users";
 import Chat from "./pages/Chat";
 import Meetings from "./pages/Meetings";
+import Drive from "./pages/Drive";
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 const NAV: { group: string; items: NavItem[] }[] = [
@@ -35,6 +36,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Communication", items: [
     { to: "/chat", label: "단체 채팅", icon: "forum" },
     { to: "/meetings", label: "화상회의", icon: "videocam" },
+    { to: "/drive", label: "파일함", icon: "folder_shared" },
   ]},
   { group: "Trade & Logistics", items: [
     { to: "/imports", label: "원료 수입현황", icon: "sailing" },
@@ -163,6 +165,7 @@ export default function App() {
         <Route path="/weekly" element={<WeeklyReports />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/meetings" element={<Meetings />} />
+        <Route path="/drive" element={<Drive />} />
         <Route path="/imports" element={<Imports />} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
