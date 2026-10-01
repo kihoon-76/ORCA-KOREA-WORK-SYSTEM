@@ -131,7 +131,8 @@ CREATE TABLE IF NOT EXISTS attachments (
   content_type  TEXT,
   size          INTEGER,
   uploaded_by   INTEGER REFERENCES users(id),
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  description   TEXT            -- 파일 설명 (업로드한 사람이 직접 입력)
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);
 

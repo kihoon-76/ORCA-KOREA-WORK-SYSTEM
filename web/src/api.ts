@@ -52,12 +52,13 @@ export const api = {
   post: <T = any>(p: string, b?: any) => request<T>("POST", p, b),
   put: <T = any>(p: string, b?: any) => request<T>("PUT", p, b),
   del: <T = any>(p: string) => request<T>("DELETE", p),
-  upload: async (file: File, entityType: string, entityId: number, category: string) => {
+  upload: async (file: File, entityType: string, entityId: number, category: string, description?: string) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("entity_type", entityType);
     fd.append("entity_id", String(entityId));
     fd.append("category", category);
+    if (description) fd.append("description", description);
     return request("POST", "/files/upload", fd);
   },
   uploadChat: async (channelId: number, file: File, body = "") => {
