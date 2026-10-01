@@ -260,10 +260,31 @@ export default function TradeModule({ config }: { config: Config }) {
     }
   }
 
+  const [backingUp, setBackingUp] = useState(false);
+  async function backfillBackup() {
+    if (!confirm(`지금까지 올라온 첨부파일을 전부 파일함(자동 백업 → ${config.title} → 거래처명)에 백업할까요?\n이미 백업된 파일은 건너뜁니다.`)) return;
+    setBackingUp(true);
+    try {
+      const r = await api.post(`/files/backfill-trade-backup?kind=${config.kind}`, {});
+      alert(`백업 완료: 총 ${r.total}건 중 신규 백업 ${r.backed_up}건, 이미 백업됨 ${r.skipped}건, 실패 ${r.failed}건`);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader title={config.title} subtitle={config.subtitle}
-        action={<button className="btn-primary" onClick={openNew}>+ 신규 등록</button>} />
+        action={
+          <div className="flex gap-2">
+            <button className="btn-secondary" onClick={backfillBackup} disabled={backingUp}>
+              {backingUp ? "백업 중..." : "📁 기존 파일 전체 백업"}
+            </button>
+            <button className="btn-primary" onClick={openNew}>+ 신규 등록</button>
+          </div>
+        } />
       {loading ? <Spinner /> : items.length === 0 ? <Empty /> : (
         <div className="card">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
