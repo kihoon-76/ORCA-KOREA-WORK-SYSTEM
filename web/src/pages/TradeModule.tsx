@@ -186,6 +186,25 @@ function NoteBox({ value, onCommit }: { value: string | null | undefined; onComm
   );
 }
 
+// 클릭해서 정렬할 수 있는 열 제목 — 항상 보이는 위/아래 화살표 아이콘으로 정렬 가능함을 표시
+function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: "asc" | "desc" | null; onClick: () => void }) {
+  return (
+    <th
+      className={`th cursor-pointer select-none truncate transition-colors hover:bg-slate-100 ${active ? "bg-slate-100 text-brand-600" : ""}`}
+      onClick={onClick}
+      title="클릭하면 오름차순/내림차순으로 정렬됩니다"
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        <span className="inline-flex flex-col leading-none">
+          <span className={`text-[8px] ${active && dir === "asc" ? "text-brand-600" : "text-slate-300"}`}>▲</span>
+          <span className={`-mt-0.5 text-[8px] ${active && dir === "desc" ? "text-brand-600" : "text-slate-300"}`}>▼</span>
+        </span>
+      </span>
+    </th>
+  );
+}
+
 export default function TradeModule({ config }: { config: Config }) {
   const { items, loading, reload, setItems } = useList<any>(config.endpoint);
   const [open, setOpen] = useState(false);
@@ -341,12 +360,8 @@ export default function TradeModule({ config }: { config: Config }) {
               <th className="th truncate">계약일자</th>
               <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
               <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
-              <th className="th truncate cursor-pointer select-none" onClick={() => toggleDateSort("etd")}>
-                ETD {dateSort?.key === "etd" ? (dateSort.dir === "asc" ? "▲" : "▼") : ""}
-              </th>
-              <th className="th truncate cursor-pointer select-none" onClick={() => toggleDateSort("eta")}>
-                ETA {dateSort?.key === "eta" ? (dateSort.dir === "asc" ? "▲" : "▼") : ""}
-              </th>
+              <SortHeader label="ETD" active={dateSort?.key === "etd"} dir={dateSort?.key === "etd" ? dateSort.dir : null} onClick={() => toggleDateSort("etd")} />
+              <SortHeader label="ETA" active={dateSort?.key === "eta"} dir={dateSort?.key === "eta" ? dateSort.dir : null} onClick={() => toggleDateSort("eta")} />
               <th className="th truncate">진행상황</th><th className="th"></th>
             </tr></thead>
             <tbody>
