@@ -54,4 +54,7 @@
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight; }
   .th { @apply px-4 py-3 text-left mono-label text-on-surface-variant; }
   .td { @apply px-4 py-3 text-sm text-on-surface; }
+  /* 컬럼이 많은 표(원료 수입/수출현황 등)에서 기본 배율에서도 여유 있게 보이도록 패딩을 줄인 버전 */
+  .table-compact .th { @apply px-2.5 py-2.5; }
+  .table-compact .td { @apply px-2.5 py-2; }
 }

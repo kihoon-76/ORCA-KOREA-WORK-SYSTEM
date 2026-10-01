@@ -171,6 +171,7 @@ export default function TradeModule({ config }: { config: Config }) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [etaSort, setEtaSort] = useState<"asc" | "desc" | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [showCol, setShowCol] = useState<{ ref: boolean; vessel: boolean }>({ ref: false, vessel: false });
 
   const lcLabel = config.lcLabel || "LC개설";
   const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...filterCols(lcLabel)];
@@ -272,11 +273,19 @@ export default function TradeModule({ config }: { config: Config }) {
             <span className="ml-auto text-xs text-slate-400">{filtered.length}건 표시 (전체 {items.length}건)</span>
           </div>
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px]">
+          <table className="table-compact w-full min-w-[980px]">
             <thead><tr className="bg-slate-50">
-              <th className="th">관리번호</th><th className="th">원료명</th><th className="th">{config.partnerLabel}</th>
-              <th className="th">{lcLabel}</th><th className="th">물량</th><th className="th">단가/총액</th>
-              <th className="th">선박명</th><th className="th">ETD</th>
+              <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
+                onClick={() => setShowCol((c) => ({ ...c, ref: !c.ref }))}>
+                관리번호 {showCol.ref ? "▾" : "▸"}
+              </th>
+              <th className="th">원료명</th><th className="th">{config.partnerLabel}</th>
+              <th className="th">{lcLabel}</th><th className="th">물량(MT)</th><th className="th">단가/총액</th>
+              <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
+                onClick={() => setShowCol((c) => ({ ...c, vessel: !c.vessel }))}>
+                선박명 {showCol.vessel ? "▾" : "▸"}
+              </th>
+              <th className="th">ETD</th>
               <th className="th cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
                 ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
               </th>
@@ -289,7 +298,13 @@ export default function TradeModule({ config }: { config: Config }) {
                 <Fragment key={r.id}>
                   <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                     onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
-                    <td className="td"><EditableCell value={r.ref_no} onCommit={(v) => commitField(r, "ref_no", v)} /></td>
+                    <td className="td">
+                      {showCol.ref ? (
+                        <EditableCell value={r.ref_no} onCommit={(v) => commitField(r, "ref_no", v)} />
+                      ) : (
+                        <span className="text-xs text-slate-300">-</span>
+                      )}
+                    </td>
                     <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
                     <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
                     <td className="td">
@@ -297,10 +312,7 @@ export default function TradeModule({ config }: { config: Config }) {
                       <EditableCell value={r.lc_no} placeholder="LC번호" onCommit={(v) => commitField(r, "lc_no", v)} className="text-xs text-slate-400" />
                     </td>
                     <td className="td">
-                      <div className="flex items-center gap-1">
-                        <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-16" />
-                        <EditableCell value={r.unit} onCommit={(v) => commitField(r, "unit", v)} className="w-12" />
-                      </div>
+                      <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-20" />
                     </td>
                     <td className="td">
                       <div className="flex items-center gap-1">
@@ -321,7 +333,13 @@ export default function TradeModule({ config }: { config: Config }) {
                         </select>
                       </div>
                     </td>
-                    <td className="td"><EditableCell value={r.vessel} onCommit={(v) => commitField(r, "vessel", v)} /></td>
+                    <td className="td">
+                      {showCol.vessel ? (
+                        <EditableCell value={r.vessel} onCommit={(v) => commitField(r, "vessel", v)} />
+                      ) : (
+                        <span className="text-xs text-slate-300">-</span>
+                      )}
+                    </td>
                     <td className="td"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} /></td>
                     <td className="td"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} /></td>
                     <td className="td"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
