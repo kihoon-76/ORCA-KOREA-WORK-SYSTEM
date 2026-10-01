@@ -21,26 +21,33 @@ async function ensureFolder(c: any, name: string, parentId: number | null): Prom
   return ins.meta.last_row_id as number;
 }
 
-// 원료 수입/수출현황 건의 거래처(공급사/바이어) 이름 — 백업 폴더를 거래처별로 나누는 데 사용
-async function partnerFolderName(c: any, entityType: string, entityId: number): Promise<string | null> {
+// 원료 수입/수출현황 건의 거래처(공급사/바이어)명 + 계약 식별용 라벨 — 백업 폴더를 거래처별/계약별로 나누는 데 사용
+async function tradeFolderInfo(c: any, entityType: string, entityId: number): Promise<{ partner: string | null; contract: string }> {
+  let row: any = null;
+  let partnerField = "";
   if (entityType === "import") {
-    const row: any = await c.env.DB.prepare("SELECT supplier FROM imports WHERE id = ?").bind(entityId).first();
-    return (row?.supplier || "").toString().trim() || null;
+    row = await c.env.DB.prepare("SELECT supplier, material_name, contract_date FROM imports WHERE id = ?").bind(entityId).first();
+    partnerField = "supplier";
+  } else if (entityType === "export") {
+    row = await c.env.DB.prepare("SELECT buyer, material_name, contract_date FROM exports WHERE id = ?").bind(entityId).first();
+    partnerField = "buyer";
   }
-  if (entityType === "export") {
-    const row: any = await c.env.DB.prepare("SELECT buyer FROM exports WHERE id = ?").bind(entityId).first();
-    return (row?.buyer || "").toString().trim() || null;
-  }
-  return null;
+  const partner = (row?.[partnerField] || "").toString().trim() || null;
+  const parts = [row?.material_name, row?.contract_date].filter((v) => v && String(v).trim());
+  const contract = `${parts.length ? parts.join(" ") : "계약"} #${entityId}`;
+  return { partner, contract };
 }
 
-// 백업 폴더 경로("자동 백업" -> 엔티티 라벨 -> (거래처별인 경우) 거래처명)를 보장하고 그 폴더 id를 반환
+// 백업 폴더 경로("자동 백업" -> 엔티티 라벨 -> (거래처별인 경우) 거래처명 -> (원료 수입/수출인 경우) 계약별 폴더)를 보장하고 그 폴더 id를 반환
 async function ensureBackupFolder(c: any, entityType: string, entityId: number): Promise<number> {
   const rootId = await ensureFolder(c, "자동 백업", null);
-  const subId = await ensureFolder(c, ENTITY_LABELS[entityType] || entityType, rootId);
-  const partner = await partnerFolderName(c, entityType, entityId);
-  if (partner) return ensureFolder(c, partner, subId);
-  return subId;
+  let folderId = await ensureFolder(c, ENTITY_LABELS[entityType] || entityType, rootId);
+  if (entityType === "import" || entityType === "export") {
+    const { partner, contract } = await tradeFolderInfo(c, entityType, entityId);
+    if (partner) folderId = await ensureFolder(c, partner, folderId);
+    folderId = await ensureFolder(c, contract, folderId);
+  }
+  return folderId;
 }
 
 // 파일 업로드: multipart/form-data (file, entity_type, entity_id, category, description?)
@@ -99,29 +106,38 @@ app.post("/backfill-trade-backup", authMiddleware, async (c) => {
     `SELECT * FROM attachments WHERE entity_type = ? AND category IN ('contract','shipping_docs','settlement') ORDER BY id`
   ).bind(kind).all<any>();
 
-  let backedUp = 0, skipped = 0, failed = 0;
+  let backedUp = 0, moved = 0, skipped = 0, failed = 0;
   for (const orig of originals) {
-    const already = await c.env.DB.prepare("SELECT id FROM attachments WHERE backup_source_id = ?").bind(orig.id).first();
-    if (already) { skipped++; continue; }
     try {
+      const targetFolderId = await ensureBackupFolder(c, kind, orig.entity_id);
+      const already: any = await c.env.DB.prepare("SELECT id, entity_id FROM attachments WHERE backup_source_id = ?").bind(orig.id).first();
+      if (already) {
+        // 이미 백업되어 있던 파일 — 폴더 구조가 바뀌었으면(거래처/계약별 폴더 신설 등) 새 위치로 옮겨줌
+        if (already.entity_id !== targetFolderId) {
+          await c.env.DB.prepare("UPDATE attachments SET entity_id = ? WHERE id = ?").bind(targetFolderId, already.id).run();
+          moved++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
       const obj = await c.env.FILES.get(orig.file_key);
       if (!obj) { failed++; continue; }
       const buf = await obj.arrayBuffer();
-      const subId = await ensureBackupFolder(c, kind, orig.entity_id);
       const safeName = orig.file_name.replace(/[^\w.\-가-힣]/g, "_");
-      const backupKey = `drive_folder/${subId}/${crypto.randomUUID()}_${safeName}`;
+      const backupKey = `drive_folder/${targetFolderId}/${crypto.randomUUID()}_${safeName}`;
       await c.env.FILES.put(backupKey, buf, { httpMetadata: { contentType: orig.content_type || "application/octet-stream" } });
       const backupDesc = orig.description ? `${orig.description} (${orig.category})` : `[${orig.category}] ${orig.file_name}`;
       await c.env.DB.prepare(
         `INSERT INTO attachments (entity_type, entity_id, category, file_name, file_key, content_type, size, uploaded_by, description, backup_source_id)
          VALUES ('drive_folder',?,?,?,?,?,?,?,?,?)`
-      ).bind(subId, orig.category, orig.file_name, backupKey, orig.content_type || null, orig.size, user.uid, backupDesc, orig.id).run();
+      ).bind(targetFolderId, orig.category, orig.file_name, backupKey, orig.content_type || null, orig.size, user.uid, backupDesc, orig.id).run();
       backedUp++;
     } catch {
       failed++;
     }
   }
-  return c.json({ ok: true, total: originals.length, backed_up: backedUp, skipped, failed });
+  return c.json({ ok: true, total: originals.length, backed_up: backedUp, moved, skipped, failed });
 });
 
 // 엔티티별 첨부 목록

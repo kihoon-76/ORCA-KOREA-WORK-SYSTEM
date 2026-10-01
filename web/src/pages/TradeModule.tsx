@@ -262,11 +262,11 @@ export default function TradeModule({ config }: { config: Config }) {
 
   const [backingUp, setBackingUp] = useState(false);
   async function backfillBackup() {
-    if (!confirm(`지금까지 올라온 첨부파일을 전부 파일함(자동 백업 → ${config.title} → 거래처명)에 백업할까요?\n이미 백업된 파일은 건너뜁니다.`)) return;
+    if (!confirm(`지금까지 올라온 첨부파일을 전부 파일함(자동 백업 → ${config.title} → 거래처명 → 계약별 폴더)에 백업/정리할까요?\n이미 올바른 위치에 백업된 파일은 건너뜁니다.`)) return;
     setBackingUp(true);
     try {
       const r = await api.post(`/files/backfill-trade-backup?kind=${config.kind}`, {});
-      alert(`백업 완료: 총 ${r.total}건 중 신규 백업 ${r.backed_up}건, 이미 백업됨 ${r.skipped}건, 실패 ${r.failed}건`);
+      alert(`백업 완료: 총 ${r.total}건 중 신규 백업 ${r.backed_up}건, 폴더 이동 ${r.moved}건, 이미 정상 ${r.skipped}건, 실패 ${r.failed}건`);
     } catch (e: any) {
       alert(e.message);
     } finally {
