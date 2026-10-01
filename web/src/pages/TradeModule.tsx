@@ -49,20 +49,21 @@ function uniqueOptions(items: any[], key: string) {
 }
 
 // 테이블 셀 바로 수정용 인라인 입력 (바깥 클릭으로 인한 행 펼치기 토글 방지 포함)
-function EditableCell({ value, onCommit, type = "text", placeholder, className = "", width }:
-  { value: any; onCommit: (v: string) => void; type?: string; placeholder?: string; className?: string; width?: number }) {
+function EditableCell({ value, onCommit, type = "text", placeholder, className = "", width, padX }:
+  { value: any; onCommit: (v: string) => void; type?: string; placeholder?: string; className?: string; width?: number; padX?: number }) {
   const [v, setV] = useState(value ?? "");
   useEffect(() => { setV(value ?? ""); }, [value]);
-  // width는 인라인 style로 지정한다 — Tailwind의 w-full(기본값)과 w-10/w-14 같은 고정폭 클래스가
-  // 같은 className 문자열에 함께 있으면, 컴파일된 CSS에서 어느 쪽이 나중에 선언됐는지에 따라
-  // 승자가 갈려 의도한 폭이 무시되는 문제가 있어(실제로 단가 입력칸이 이 때문에 전체폭으로 깨졌었음),
-  // 고정폭이 필요한 곳은 className이 아니라 style로 줘서 그 문제를 원천적으로 피한다.
+  // width/padX는 인라인 style로 지정한다 — Tailwind의 w-full(기본값)·px-1.5(기본값)와
+  // w-10/w-14, px-0.5 같은 오버라이드 클래스가 같은 className 문자열에 함께 있으면,
+  // 컴파일된 CSS에서 어느 쪽이 나중에 선언됐는지에 따라 승자가 갈려 의도한 값이 무시되는 문제가 있어
+  // (실제로 단가 입력칸 폭, 날짜 입력칸 패딩이 이 때문에 깨졌었음),
+  // 폭/패딩 오버라이드가 필요한 곳은 className이 아니라 style로 줘서 그 문제를 원천적으로 피한다.
   return (
     <input
       type={type}
       placeholder={placeholder}
-      className={`${width ? "" : "w-full"} min-w-0 truncate rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
-      style={width ? { width, flexShrink: 0 } : undefined}
+      className={`${width ? "" : "w-full"} min-w-0 truncate rounded border border-transparent bg-transparent ${padX == null ? "px-1.5" : ""} py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
+      style={{ ...(width ? { width, flexShrink: 0 } : {}), ...(padX != null ? { paddingLeft: padX, paddingRight: padX } : {}) }}
       value={v}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setV(e.target.value)}
@@ -149,8 +150,11 @@ function AttachmentPanel({ entityType, entityId, category, label }:
         <ul className="space-y-1">
           {files.map((f) => (
             <li key={f.id} className="flex items-center gap-2 rounded bg-slate-50 px-2 py-1.5 text-xs">
-              <button className="shrink-0 max-w-[40%] truncate text-brand-600 hover:underline" onClick={() => api.download(f.id, f.file_name)} title={f.file_name}>
+              <button className="shrink-0 max-w-[32%] truncate text-brand-600 hover:underline" onClick={() => api.preview(f.id)} title={`${f.file_name} (클릭하면 미리보기)`}>
                 {f.file_name}
+              </button>
+              <button className="shrink-0 text-slate-400 hover:text-brand-600" onClick={() => api.download(f.id, f.file_name)} title="다운로드">
+                ⬇
               </button>
               <input
                 className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-500 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none"
@@ -347,16 +351,16 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: 100 }} />
-              <col style={{ width: 105 }} />
-              <col style={{ width: 95 }} />
-              <col style={{ width: 115 }} />
-              <col style={{ width: 72 }} />
-              <col style={{ width: 160 }} />
-              <col style={{ width: 96 }} />
-              <col style={{ width: 104 }} />
-              <col style={{ width: 210 }} />
-              <col style={{ width: 40 }} />
+              <col style={{ width: 108 }} />
+              <col style={{ width: 103 }} />
+              <col style={{ width: 93 }} />
+              <col style={{ width: 109 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 206 }} />
+              <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
               <th className="th truncate">계약일자</th>
@@ -374,7 +378,7 @@ export default function TradeModule({ config }: { config: Config }) {
                   <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                     onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
                     <td className="td overflow-hidden px-1">
-                      <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="px-0.5 text-xs" />
+                      <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="text-xs" padX={2} />
                     </td>
                     <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
                     <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
@@ -404,8 +408,8 @@ export default function TradeModule({ config }: { config: Config }) {
                         </select>
                       </div>
                     </td>
-                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="px-0.5 text-xs" /></td>
-                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="px-0.5 text-xs" /></td>
+                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="text-xs" padX={2} /></td>
+                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="text-xs" padX={2} /></td>
                     <td className="td overflow-hidden"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
                     <td className="td text-right whitespace-nowrap px-1">
                       <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">

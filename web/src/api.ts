@@ -83,4 +83,18 @@ export const api = {
     a.remove();
     URL.revokeObjectURL(url);
   },
+  // 파일을 바로 다운로드하지 않고 새 탭에서 미리보기로 열어준다 (이미지/PDF는 브라우저가 바로 보여주고,
+  // 그 외 형식은 브라우저가 지원하는 대로 처리됨 — 다운로드가 필요하면 별도 다운로드 버튼 사용)
+  preview: async (id: number) => {
+    const token = getToken();
+    const res = await fetch(`/api/files/download/${id}?inline=1`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError("미리보기 실패", res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    // 새 탭이 로드할 시간을 준 뒤 해제 (너무 빨리 해제하면 미리보기가 깨질 수 있음)
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
 };

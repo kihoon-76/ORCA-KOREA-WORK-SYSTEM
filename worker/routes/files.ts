@@ -160,9 +160,10 @@ app.get("/download/:id", authMiddleware, async (c) => {
   if (!row) return c.json({ error: "파일을 찾을 수 없습니다" }, 404);
   const obj = await c.env.FILES.get(row.file_key);
   if (!obj) return c.json({ error: "저장소에 파일이 없습니다" }, 404);
+  const inline = c.req.query("inline") === "1";
   const headers = new Headers();
   headers.set("Content-Type", row.content_type || "application/octet-stream");
-  headers.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(row.file_name)}`);
+  headers.set("Content-Disposition", `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(row.file_name)}`);
   return new Response(obj.body, { headers });
 });
 

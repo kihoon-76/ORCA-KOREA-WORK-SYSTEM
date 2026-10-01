@@ -68,3 +68,9 @@
 .table-compact input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* 좁은 표 칸에서 날짜 입력칸의 달력 아이콘이 날짜 숫자와 겹치지 않도록 아이콘 여백을 최소화 */
+.table-compact input[type="date"]::-webkit-calendar-picker-indicator {
+  padding: 0;
+  margin-left: 2px;
+}
