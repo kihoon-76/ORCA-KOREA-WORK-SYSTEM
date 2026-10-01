@@ -58,7 +58,7 @@ function EditableCell({ value, onCommit, type = "text", placeholder, className =
     <input
       type={type}
       placeholder={placeholder}
-      className={`w-full min-w-0 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
+      className={`w-full min-w-0 truncate rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
       value={v}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setV(e.target.value)}
@@ -77,7 +77,7 @@ function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: str
             type="button"
             title={s.l}
             onClick={() => onSelect(s.v)}
-            className={`whitespace-nowrap rounded-full px-2 py-1 text-[10.5px] font-bold transition ${
+            className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9.5px] font-bold transition ${
               i < cur ? "bg-brand-100 text-brand-700 hover:bg-brand-200"
               : i === cur ? "bg-brand-600 text-white"
               : "bg-slate-100 text-slate-400 hover:bg-slate-200"
@@ -85,7 +85,7 @@ function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: str
           >
             {s.l}
           </button>
-          {i < STAGES.length - 1 && <div className={`h-0.5 w-2 ${i < cur ? "bg-brand-300" : "bg-slate-200"}`} />}
+          {i < STAGES.length - 1 && <div className={`h-0.5 w-1 ${i < cur ? "bg-brand-300" : "bg-slate-200"}`} />}
         </div>
       ))}
     </div>
@@ -273,23 +273,36 @@ export default function TradeModule({ config }: { config: Config }) {
             <span className="ml-auto text-xs text-slate-400">{filtered.length}건 표시 (전체 {items.length}건)</span>
           </div>
           <div className="overflow-x-auto">
-          <table className="table-compact w-full min-w-[980px]">
+          <table className="table-compact w-full table-fixed">
+            <colgroup>
+              <col style={{ width: showCol.ref ? 100 : 50 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: showCol.vessel ? 100 : 50 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 108 }} />
+              <col style={{ width: 215 }} />
+              <col style={{ width: 40 }} />
+            </colgroup>
             <thead><tr className="bg-slate-50">
               <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
                 onClick={() => setShowCol((c) => ({ ...c, ref: !c.ref }))}>
                 관리번호 {showCol.ref ? "▾" : "▸"}
               </th>
-              <th className="th">원료명</th><th className="th">{config.partnerLabel}</th>
-              <th className="th">{lcLabel}</th><th className="th">물량(MT)</th><th className="th">단가/총액</th>
+              <th className="th whitespace-nowrap">원료명</th><th className="th whitespace-nowrap truncate">{config.partnerLabel}</th>
+              <th className="th whitespace-nowrap truncate">{lcLabel}</th><th className="th whitespace-nowrap">물량(MT)</th><th className="th whitespace-nowrap">단가/총액</th>
               <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
                 onClick={() => setShowCol((c) => ({ ...c, vessel: !c.vessel }))}>
                 선박명 {showCol.vessel ? "▾" : "▸"}
               </th>
-              <th className="th">ETD</th>
-              <th className="th cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
+              <th className="th whitespace-nowrap">ETD</th>
+              <th className="th cursor-pointer select-none whitespace-nowrap" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
                 ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
               </th>
-              <th className="th">진행상황</th><th className="th"></th>
+              <th className="th whitespace-nowrap">진행상황</th><th className="th"></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
@@ -312,21 +325,21 @@ export default function TradeModule({ config }: { config: Config }) {
                       <EditableCell value={r.lc_no} placeholder="LC번호" onCommit={(v) => commitField(r, "lc_no", v)} className="text-xs text-slate-400" />
                     </td>
                     <td className="td">
-                      <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-20" />
+                      <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-full" />
                     </td>
-                    <td className="td">
+                    <td className="td overflow-hidden">
                       <div className="flex items-center gap-1">
-                        <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} className="w-12" />
-                        <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} className="w-16" />
+                        <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} className="w-10 shrink-0" />
+                        <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} className="w-14 shrink-0" />
                       </div>
-                      <div className="px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
+                      <div className="truncate px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
                       <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
-                        <select className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+                        <select className="w-[52px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
                           value={r.incoterms || ""} onChange={(e) => commitField(r, "incoterms", e.target.value)}>
                           <option value="">조건</option>
                           {INCOTERMS.map((v) => <option key={v} value={v}>{v}</option>)}
                         </select>
-                        <select className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+                        <select className="w-[48px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
                           value={r.payment_type || ""} onChange={(e) => commitField(r, "payment_type", e.target.value)}>
                           <option value="">결제</option>
                           {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
@@ -340,11 +353,13 @@ export default function TradeModule({ config }: { config: Config }) {
                         <span className="text-xs text-slate-300">-</span>
                       )}
                     </td>
-                    <td className="td"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} /></td>
-                    <td className="td"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} /></td>
-                    <td className="td"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
-                    <td className="td text-right whitespace-nowrap">
-                      <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }}>삭제</button>
+                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="px-0.5 text-xs" /></td>
+                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="px-0.5 text-xs" /></td>
+                    <td className="td overflow-hidden"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
+                    <td className="td text-right whitespace-nowrap px-1">
+                      <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
                     </td>
                   </tr>
                   {expandedId === r.id && (
