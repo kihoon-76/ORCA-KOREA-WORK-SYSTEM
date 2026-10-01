@@ -186,21 +186,23 @@ function NoteBox({ value, onCommit }: { value: string | null | undefined; onComm
   );
 }
 
-// 클릭해서 정렬할 수 있는 열 제목 — 항상 보이는 위/아래 화살표 아이콘으로 정렬 가능함을 표시
+// 클릭해서 정렬할 수 있는 열 제목 — 항상 보이는 정렬 아이콘 버튼으로 정렬 가능함을 뚜렷하게 표시
 function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: "asc" | "desc" | null; onClick: () => void }) {
   return (
     <th
-      className={`th cursor-pointer select-none truncate transition-colors hover:bg-slate-100 ${active ? "bg-slate-100 text-brand-600" : ""}`}
-      onClick={onClick}
+      className={`th truncate transition-colors ${active ? "bg-brand-50" : ""}`}
       title="클릭하면 오름차순/내림차순으로 정렬됩니다"
     >
-      <span className="inline-flex items-center gap-0.5">
-        {label}
-        <span className="inline-flex flex-col leading-none">
-          <span className={`text-[8px] ${active && dir === "asc" ? "text-brand-600" : "text-slate-300"}`}>▲</span>
-          <span className={`-mt-0.5 text-[8px] ${active && dir === "desc" ? "text-brand-600" : "text-slate-300"}`}>▼</span>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-colors hover:bg-brand-100 ${active ? "text-brand-700" : "text-slate-600"}`}
+      >
+        <span>{label}</span>
+        <span className={`text-xs font-bold ${active ? "text-brand-600" : "text-slate-400"}`}>
+          {active ? (dir === "asc" ? "↑" : "↓") : "↕"}
         </span>
-      </span>
+      </button>
     </th>
   );
 }
