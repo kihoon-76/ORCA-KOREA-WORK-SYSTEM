@@ -275,34 +275,34 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: showCol.ref ? 100 : 50 }} />
+              <col style={{ width: showCol.ref ? 108 : 66 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 90 }} />
               <col style={{ width: 110 }} />
-              <col style={{ width: 56 }} />
-              <col style={{ width: 160 }} />
-              <col style={{ width: showCol.vessel ? 100 : 50 }} />
-              <col style={{ width: 100 }} />
-              <col style={{ width: 108 }} />
-              <col style={{ width: 215 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 155 }} />
+              <col style={{ width: showCol.vessel ? 108 : 66 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 104 }} />
+              <col style={{ width: 205 }} />
               <col style={{ width: 40 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
-              <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
+              <th className="th truncate cursor-pointer select-none" title="클릭하면 펼쳐집니다"
                 onClick={() => setShowCol((c) => ({ ...c, ref: !c.ref }))}>
                 관리번호 {showCol.ref ? "▾" : "▸"}
               </th>
-              <th className="th whitespace-nowrap">원료명</th><th className="th whitespace-nowrap truncate">{config.partnerLabel}</th>
-              <th className="th whitespace-nowrap truncate">{lcLabel}</th><th className="th whitespace-nowrap">물량(MT)</th><th className="th whitespace-nowrap">단가/총액</th>
-              <th className="th cursor-pointer select-none whitespace-nowrap" title="클릭하면 펼쳐집니다"
+              <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
+              <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
+              <th className="th truncate cursor-pointer select-none" title="클릭하면 펼쳐집니다"
                 onClick={() => setShowCol((c) => ({ ...c, vessel: !c.vessel }))}>
                 선박명 {showCol.vessel ? "▾" : "▸"}
               </th>
-              <th className="th whitespace-nowrap">ETD</th>
-              <th className="th cursor-pointer select-none whitespace-nowrap" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
+              <th className="th truncate">ETD</th>
+              <th className="th truncate cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
                 ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
               </th>
-              <th className="th whitespace-nowrap">진행상황</th><th className="th"></th>
+              <th className="th truncate">진행상황</th><th className="th"></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (

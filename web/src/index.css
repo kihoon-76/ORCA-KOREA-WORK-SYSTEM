@@ -58,3 +58,13 @@
   .table-compact .th { @apply px-2.5 py-2.5; }
   .table-compact .td { @apply px-2.5 py-2; }
 }
+
+/* 좁은 표 칸에서 숫자 입력칸의 위아래 스피너가 공간을 잡아먹지 않도록 제거 */
+.table-compact input[type="number"]::-webkit-outer-spin-button,
+.table-compact input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.table-compact input[type="number"] {
+  -moz-appearance: textfield;
+}
