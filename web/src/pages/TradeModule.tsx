@@ -191,7 +191,7 @@ export default function TradeModule({ config }: { config: Config }) {
   const [open, setOpen] = useState(false);
   const [row, setRow] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [etaSort, setEtaSort] = useState<"asc" | "desc" | null>(null);
+  const [dateSort, setDateSort] = useState<{ key: "etd" | "eta"; dir: "asc" | "desc" } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const lcLabel = config.lcLabel || "LC개설";
@@ -205,13 +205,22 @@ export default function TradeModule({ config }: { config: Config }) {
     if (filters.status && r.status !== filters.status) return false;
     return true;
   });
-  if (etaSort) {
+  if (dateSort) {
+    const { key, dir } = dateSort;
     filtered = [...filtered].sort((a, b) => {
-      const av = a.eta || "", bv = b.eta || "";
+      const av = a[key] || "", bv = b[key] || "";
       if (!av && !bv) return 0;
       if (!av) return 1;
       if (!bv) return -1;
-      return etaSort === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }
+
+  function toggleDateSort(key: "etd" | "eta") {
+    setDateSort((s) => {
+      if (!s || s.key !== key) return { key, dir: "asc" };
+      if (s.dir === "asc") return { key, dir: "desc" };
+      return null;
     });
   }
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
@@ -332,9 +341,11 @@ export default function TradeModule({ config }: { config: Config }) {
               <th className="th truncate">계약일자</th>
               <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
               <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
-              <th className="th truncate">ETD</th>
-              <th className="th truncate cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
-                ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
+              <th className="th truncate cursor-pointer select-none" onClick={() => toggleDateSort("etd")}>
+                ETD {dateSort?.key === "etd" ? (dateSort.dir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th className="th truncate cursor-pointer select-none" onClick={() => toggleDateSort("eta")}>
+                ETA {dateSort?.key === "eta" ? (dateSort.dir === "asc" ? "▲" : "▼") : ""}
               </th>
               <th className="th truncate">진행상황</th><th className="th"></th>
             </tr></thead>
