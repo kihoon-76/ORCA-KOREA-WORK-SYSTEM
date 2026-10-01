@@ -36,7 +36,6 @@ function filterCols(lcLabel: string): { key: string; label: string }[] {
   return [
     { key: "material_name", label: "원료명" },
     { key: "lc_bank", label: lcLabel },
-    { key: "vessel", label: "선박명" },
   ];
 }
 
@@ -164,6 +163,24 @@ function AttachmentPanel({ entityType, entityId, category, label }:
   );
 }
 
+function NoteBox({ value, onCommit }: { value: string | null | undefined; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-1 text-xs font-semibold text-slate-600">📝 메모</div>
+      <textarea
+        className="input text-xs"
+        rows={2}
+        placeholder="이 건에 대한 메모를 남겨주세요"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => { if (v !== (value ?? "")) onCommit(v); }}
+      />
+    </div>
+  );
+}
+
 export default function TradeModule({ config }: { config: Config }) {
   const { items, loading, reload, setItems } = useList<any>(config.endpoint);
   const [open, setOpen] = useState(false);
@@ -171,7 +188,6 @@ export default function TradeModule({ config }: { config: Config }) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [etaSort, setEtaSort] = useState<"asc" | "desc" | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [showCol, setShowCol] = useState<{ ref: boolean; vessel: boolean }>({ ref: false, vessel: false });
 
   const lcLabel = config.lcLabel || "LC개설";
   const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...filterCols(lcLabel)];
@@ -199,10 +215,10 @@ export default function TradeModule({ config }: { config: Config }) {
 
   async function save() {
     const body: any = {
-      ref_no: row.ref_no, material_name: row.material_name, lc_bank: row.lc_bank, lc_no: row.lc_no,
+      contract_date: row.contract_date, material_name: row.material_name, lc_bank: row.lc_bank, lc_no: row.lc_no,
       quantity: num(row.quantity), unit: row.unit, unit_price: num(row.unit_price), currency: row.currency,
       incoterms: row.incoterms, payment_type: row.payment_type,
-      vessel: row.vessel, etd: row.etd, eta: row.eta, note: row.note,
+      etd: row.etd, eta: row.eta, note: row.note,
     };
     body[config.partnerKey] = row[config.partnerKey];
     await api.post(config.endpoint, body);
@@ -275,29 +291,21 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: showCol.ref ? 108 : 66 }} />
               <col style={{ width: 100 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 70 }} />
-              <col style={{ width: 155 }} />
-              <col style={{ width: showCol.vessel ? 108 : 66 }} />
+              <col style={{ width: 105 }} />
+              <col style={{ width: 95 }} />
+              <col style={{ width: 115 }} />
+              <col style={{ width: 72 }} />
+              <col style={{ width: 160 }} />
               <col style={{ width: 96 }} />
               <col style={{ width: 104 }} />
-              <col style={{ width: 205 }} />
+              <col style={{ width: 210 }} />
               <col style={{ width: 40 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
-              <th className="th truncate cursor-pointer select-none" title="클릭하면 펼쳐집니다"
-                onClick={() => setShowCol((c) => ({ ...c, ref: !c.ref }))}>
-                관리번호 {showCol.ref ? "▾" : "▸"}
-              </th>
+              <th className="th truncate">계약일자</th>
               <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
               <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
-              <th className="th truncate cursor-pointer select-none" title="클릭하면 펼쳐집니다"
-                onClick={() => setShowCol((c) => ({ ...c, vessel: !c.vessel }))}>
-                선박명 {showCol.vessel ? "▾" : "▸"}
-              </th>
               <th className="th truncate">ETD</th>
               <th className="th truncate cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
                 ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
@@ -306,17 +314,13 @@ export default function TradeModule({ config }: { config: Config }) {
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td className="td text-center text-slate-400" colSpan={11}>조건에 맞는 데이터가 없습니다</td></tr>
+                <tr><td className="td text-center text-slate-400" colSpan={10}>조건에 맞는 데이터가 없습니다</td></tr>
               ) : filtered.map((r) => (
                 <Fragment key={r.id}>
                   <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                     onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
-                    <td className="td">
-                      {showCol.ref ? (
-                        <EditableCell value={r.ref_no} onCommit={(v) => commitField(r, "ref_no", v)} />
-                      ) : (
-                        <span className="text-xs text-slate-300">-</span>
-                      )}
+                    <td className="td overflow-hidden px-1">
+                      <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="px-0.5 text-xs" />
                     </td>
                     <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
                     <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
@@ -346,13 +350,6 @@ export default function TradeModule({ config }: { config: Config }) {
                         </select>
                       </div>
                     </td>
-                    <td className="td">
-                      {showCol.vessel ? (
-                        <EditableCell value={r.vessel} onCommit={(v) => commitField(r, "vessel", v)} />
-                      ) : (
-                        <span className="text-xs text-slate-300">-</span>
-                      )}
-                    </td>
                     <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="px-0.5 text-xs" /></td>
                     <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="px-0.5 text-xs" /></td>
                     <td className="td overflow-hidden"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
@@ -364,13 +361,13 @@ export default function TradeModule({ config }: { config: Config }) {
                   </tr>
                   {expandedId === r.id && (
                     <tr>
-                      <td colSpan={11} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                      <td colSpan={10} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
                         <div className="grid gap-3 sm:grid-cols-3">
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="settlement" label="💰 정산서류" />
                         </div>
-                        {r.note && <p className="mt-3 text-xs text-slate-500">비고: {r.note}</p>}
+                        <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                       </td>
                     </tr>
                   )}
@@ -386,7 +383,7 @@ export default function TradeModule({ config }: { config: Config }) {
         {row && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Field label="관리번호"><input className="input" value={row.ref_no || ""} onChange={(e) => setRow({ ...row, ref_no: e.target.value })} /></Field>
+              <Field label="계약일자"><input type="date" className="input" value={row.contract_date || ""} onChange={(e) => setRow({ ...row, contract_date: e.target.value })} /></Field>
               <Field label="원료명"><input className="input" value={row.material_name || ""} onChange={(e) => setRow({ ...row, material_name: e.target.value })} /></Field>
               <Field label={config.partnerLabel}><input className="input" value={row[config.partnerKey] || ""} onChange={(e) => setRow({ ...row, [config.partnerKey]: e.target.value })} /></Field>
               <Field label={`${lcLabel} 회사/은행`}><input className="input" value={row.lc_bank || ""} onChange={(e) => setRow({ ...row, lc_bank: e.target.value })} /></Field>
@@ -407,7 +404,6 @@ export default function TradeModule({ config }: { config: Config }) {
                   {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
               </Field>
-              <Field label="선박명"><input className="input" value={row.vessel || ""} onChange={(e) => setRow({ ...row, vessel: e.target.value })} /></Field>
               <Field label="ETD (출항)"><input type="date" className="input" value={row.etd || ""} onChange={(e) => setRow({ ...row, etd: e.target.value })} /></Field>
               <Field label="ETA (도착)"><input type="date" className="input" value={row.eta || ""} onChange={(e) => setRow({ ...row, eta: e.target.value })} /></Field>
             </div>

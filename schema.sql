@@ -172,7 +172,8 @@ CREATE TABLE IF NOT EXISTS material_analyses (
 -- ============ 원료 수입현황 ============
 CREATE TABLE IF NOT EXISTS imports (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  ref_no        TEXT,                 -- 관리번호
+  ref_no        TEXT,                 -- (미사용, 과거 관리번호)
+  contract_date TEXT,                 -- 계약일자
   material_id   INTEGER REFERENCES materials(id),
   material_name TEXT NOT NULL,        -- 원료명 (마스터 미등록 대비)
   supplier      TEXT,                 -- 공급사(수출자)
@@ -198,7 +199,8 @@ CREATE TABLE IF NOT EXISTS imports (
 -- ============ 원료 수출현황 ============
 CREATE TABLE IF NOT EXISTS exports (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  ref_no        TEXT,
+  ref_no        TEXT,                 -- (미사용, 과거 관리번호)
+  contract_date TEXT,                 -- 계약일자
   material_id   INTEGER REFERENCES materials(id),
   material_name TEXT NOT NULL,
   buyer         TEXT,                 -- 수입자(바이어)
