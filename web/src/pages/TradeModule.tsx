@@ -49,15 +49,20 @@ function uniqueOptions(items: any[], key: string) {
 }
 
 // 테이블 셀 바로 수정용 인라인 입력 (바깥 클릭으로 인한 행 펼치기 토글 방지 포함)
-function EditableCell({ value, onCommit, type = "text", placeholder, className = "" }:
-  { value: any; onCommit: (v: string) => void; type?: string; placeholder?: string; className?: string }) {
+function EditableCell({ value, onCommit, type = "text", placeholder, className = "", width }:
+  { value: any; onCommit: (v: string) => void; type?: string; placeholder?: string; className?: string; width?: number }) {
   const [v, setV] = useState(value ?? "");
   useEffect(() => { setV(value ?? ""); }, [value]);
+  // width는 인라인 style로 지정한다 — Tailwind의 w-full(기본값)과 w-10/w-14 같은 고정폭 클래스가
+  // 같은 className 문자열에 함께 있으면, 컴파일된 CSS에서 어느 쪽이 나중에 선언됐는지에 따라
+  // 승자가 갈려 의도한 폭이 무시되는 문제가 있어(실제로 단가 입력칸이 이 때문에 전체폭으로 깨졌었음),
+  // 고정폭이 필요한 곳은 className이 아니라 style로 줘서 그 문제를 원천적으로 피한다.
   return (
     <input
       type={type}
       placeholder={placeholder}
-      className={`w-full min-w-0 truncate rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
+      className={`${width ? "" : "w-full"} min-w-0 truncate rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-slate-700 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 ${className}`}
+      style={width ? { width, flexShrink: 0 } : undefined}
       value={v}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setV(e.target.value)}
@@ -354,8 +359,8 @@ export default function TradeModule({ config }: { config: Config }) {
                     </td>
                     <td className="td overflow-hidden">
                       <div className="flex items-center gap-1">
-                        <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} className="w-10 shrink-0" />
-                        <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} className="w-14 shrink-0" />
+                        <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} width={44} />
+                        <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} width={70} />
                       </div>
                       <div className="truncate px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
                       <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
