@@ -183,6 +183,8 @@ CREATE TABLE IF NOT EXISTS imports (
   unit_price    REAL,                 -- 단가
   total_price   REAL,                 -- 총액
   currency      TEXT DEFAULT 'USD',
+  incoterms     TEXT,                 -- FOB | CFR | CIF
+  payment_type  TEXT,                 -- LC | TT
   vessel        TEXT,                 -- 선박명
   etd           TEXT,                 -- 출항 예정일
   eta           TEXT,                 -- 도착 예정일
@@ -207,6 +209,8 @@ CREATE TABLE IF NOT EXISTS exports (
   unit_price    REAL,
   total_price   REAL,
   currency      TEXT DEFAULT 'USD',
+  incoterms     TEXT,                 -- FOB | CFR | CIF
+  payment_type  TEXT,                 -- LC | TT
   vessel        TEXT,
   etd           TEXT,
   eta           TEXT,

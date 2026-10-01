@@ -10,7 +10,11 @@ interface Config {
   entityType: string;     // import | export
   partnerKey: "supplier" | "buyer";
   partnerLabel: string;
+  lcLabel?: string;       // "LC개설" 라벨을 다르게 쓸 경우 (예: 수입현황 "구매자(Buyer)")
 }
+
+const INCOTERMS = ["FOB", "CFR", "CIF"];
+const PAYMENT_TYPES = ["LC", "TT"];
 
 // 진행상황 공용 파이프라인 (수입/수출 동일)
 const STAGES = [
@@ -28,11 +32,13 @@ function stageIdx(status: string) {
   return i >= 0 ? i : (LEGACY_STAGE[status] ?? 0);
 }
 
-const FILTER_COLS: { key: string; label: string }[] = [
-  { key: "material_name", label: "원료명" },
-  { key: "lc_bank", label: "LC개설" },
-  { key: "vessel", label: "선박명" },
-];
+function filterCols(lcLabel: string): { key: string; label: string }[] {
+  return [
+    { key: "material_name", label: "원료명" },
+    { key: "lc_bank", label: lcLabel },
+    { key: "vessel", label: "선박명" },
+  ];
+}
 
 function uniqueOptions(items: any[], key: string) {
   const m = new Map<string, number>();
@@ -166,7 +172,8 @@ export default function TradeModule({ config }: { config: Config }) {
   const [etaSort, setEtaSort] = useState<"asc" | "desc" | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...FILTER_COLS];
+  const lcLabel = config.lcLabel || "LC개설";
+  const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...filterCols(lcLabel)];
 
   let filtered = items.filter((r: any) => {
     for (const f of partnerFilterCols) {
@@ -193,6 +200,7 @@ export default function TradeModule({ config }: { config: Config }) {
     const body: any = {
       ref_no: row.ref_no, material_name: row.material_name, lc_bank: row.lc_bank, lc_no: row.lc_no,
       quantity: num(row.quantity), unit: row.unit, unit_price: num(row.unit_price), currency: row.currency,
+      incoterms: row.incoterms, payment_type: row.payment_type,
       vessel: row.vessel, etd: row.etd, eta: row.eta, note: row.note,
     };
     body[config.partnerKey] = row[config.partnerKey];
@@ -267,7 +275,7 @@ export default function TradeModule({ config }: { config: Config }) {
           <table className="w-full min-w-[1180px]">
             <thead><tr className="bg-slate-50">
               <th className="th">관리번호</th><th className="th">원료명</th><th className="th">{config.partnerLabel}</th>
-              <th className="th">LC개설</th><th className="th">물량</th><th className="th">단가/총액</th>
+              <th className="th">{lcLabel}</th><th className="th">물량</th><th className="th">단가/총액</th>
               <th className="th">선박명</th><th className="th">ETD</th>
               <th className="th cursor-pointer select-none" onClick={() => setEtaSort((s) => s === "asc" ? "desc" : s === "desc" ? null : "asc")}>
                 ETA {etaSort === "asc" ? "▲" : etaSort === "desc" ? "▼" : ""}
@@ -300,6 +308,18 @@ export default function TradeModule({ config }: { config: Config }) {
                         <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} className="w-16" />
                       </div>
                       <div className="px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
+                      <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
+                        <select className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+                          value={r.incoterms || ""} onChange={(e) => commitField(r, "incoterms", e.target.value)}>
+                          <option value="">조건</option>
+                          {INCOTERMS.map((v) => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                        <select className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+                          value={r.payment_type || ""} onChange={(e) => commitField(r, "payment_type", e.target.value)}>
+                          <option value="">결제</option>
+                          {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
                     </td>
                     <td className="td"><EditableCell value={r.vessel} onCommit={(v) => commitField(r, "vessel", v)} /></td>
                     <td className="td"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} /></td>
@@ -312,9 +332,10 @@ export default function TradeModule({ config }: { config: Config }) {
                   {expandedId === r.id && (
                     <tr>
                       <td colSpan={11} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-3">
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
+                          <AttachmentPanel entityType={config.entityType} entityId={r.id} category="settlement" label="💰 정산서류" />
                         </div>
                         {r.note && <p className="mt-3 text-xs text-slate-500">비고: {r.note}</p>}
                       </td>
@@ -335,12 +356,24 @@ export default function TradeModule({ config }: { config: Config }) {
               <Field label="관리번호"><input className="input" value={row.ref_no || ""} onChange={(e) => setRow({ ...row, ref_no: e.target.value })} /></Field>
               <Field label="원료명"><input className="input" value={row.material_name || ""} onChange={(e) => setRow({ ...row, material_name: e.target.value })} /></Field>
               <Field label={config.partnerLabel}><input className="input" value={row[config.partnerKey] || ""} onChange={(e) => setRow({ ...row, [config.partnerKey]: e.target.value })} /></Field>
-              <Field label="LC개설회사/은행"><input className="input" value={row.lc_bank || ""} onChange={(e) => setRow({ ...row, lc_bank: e.target.value })} /></Field>
+              <Field label={`${lcLabel} 회사/은행`}><input className="input" value={row.lc_bank || ""} onChange={(e) => setRow({ ...row, lc_bank: e.target.value })} /></Field>
               <Field label="LC번호"><input className="input" value={row.lc_no || ""} onChange={(e) => setRow({ ...row, lc_no: e.target.value })} /></Field>
               <Field label="물량"><input type="number" className="input" value={row.quantity ?? ""} onChange={(e) => setRow({ ...row, quantity: e.target.value })} /></Field>
               <Field label="단위"><input className="input" value={row.unit || ""} onChange={(e) => setRow({ ...row, unit: e.target.value })} /></Field>
               <Field label="통화"><input className="input" value={row.currency || ""} onChange={(e) => setRow({ ...row, currency: e.target.value })} /></Field>
               <Field label="단가"><input type="number" className="input" value={row.unit_price ?? ""} onChange={(e) => setRow({ ...row, unit_price: e.target.value })} /></Field>
+              <Field label="인코텀즈">
+                <select className="input" value={row.incoterms || ""} onChange={(e) => setRow({ ...row, incoterms: e.target.value })}>
+                  <option value="">선택</option>
+                  {INCOTERMS.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </Field>
+              <Field label="거래 종류">
+                <select className="input" value={row.payment_type || ""} onChange={(e) => setRow({ ...row, payment_type: e.target.value })}>
+                  <option value="">선택</option>
+                  {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </Field>
               <Field label="선박명"><input className="input" value={row.vessel || ""} onChange={(e) => setRow({ ...row, vessel: e.target.value })} /></Field>
               <Field label="ETD (출항)"><input type="date" className="input" value={row.etd || ""} onChange={(e) => setRow({ ...row, etd: e.target.value })} /></Field>
               <Field label="ETA (도착)"><input type="date" className="input" value={row.eta || ""} onChange={(e) => setRow({ ...row, eta: e.target.value })} /></Field>

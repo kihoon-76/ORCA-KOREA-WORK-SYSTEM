@@ -9,7 +9,8 @@ export default function Imports() {
       endpoint: "/trade/imports",
       entityType: "import",
       partnerKey: "supplier",
-      partnerLabel: "공급사(수출자)",
+      partnerLabel: "공급사(Seller)",
+      lcLabel: "구매자(Buyer)",
     }} />
   );
 }
