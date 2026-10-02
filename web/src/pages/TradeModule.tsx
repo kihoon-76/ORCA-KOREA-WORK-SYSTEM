@@ -110,7 +110,7 @@ function FilterHeader({ label, value, options, onChange }:
   return (
     <th className={`th truncate p-0 ${active ? "bg-brand-50" : ""}`}>
       <select
-        className={`w-full cursor-pointer truncate border-0 bg-transparent px-2.5 py-2.5 text-left mono-label focus:outline-none focus:ring-1 focus:ring-inset focus:ring-brand-400 ${active ? "text-brand-700" : "text-on-surface-variant"}`}
+        className={`w-full cursor-pointer truncate border-0 bg-transparent px-1.5 py-2.5 text-left mono-label focus:outline-none focus:ring-1 focus:ring-inset focus:ring-brand-400 ${active ? "text-brand-700" : "text-on-surface-variant"}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -445,8 +445,8 @@ export default function TradeModule({ config }: { config: Config }) {
               <col style={{ width: 150 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 150 }} />
-              <col style={{ width: 75 }} />
-              <col style={{ width: 180 }} />
+              <col style={{ width: 95 }} />
+              <col style={{ width: 160 }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 98 }} />
               <col style={{ width: 36 }} />
@@ -490,8 +490,11 @@ export default function TradeModule({ config }: { config: Config }) {
                         <td className="td">
                           <EditableCell value={r.lc_bank} onCommit={(v) => commitField(r, "lc_bank", v)} />
                         </td>
-                        <td className="td">
-                          <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-full" />
+                        <td className="td overflow-hidden">
+                          <div className="flex items-center gap-0.5">
+                            <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} width={44} />
+                            <span className="shrink-0 text-xs text-slate-400">{r.unit || "MT"}</span>
+                          </div>
                         </td>
                         <td className="td overflow-hidden">
                           <div className="flex items-center gap-1">
