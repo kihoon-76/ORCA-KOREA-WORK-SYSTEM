@@ -76,14 +76,14 @@ function EditableCell({ value, onCommit, type = "text", placeholder, className =
 function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: string) => void }) {
   const cur = stageIdx(status);
   return (
-    <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+    <div className="flex flex-wrap items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
       {STAGES.map((s, i) => (
         <div key={s.v} className="flex items-center">
           <button
             type="button"
             title={s.l}
             onClick={() => onSelect(s.v)}
-            className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9.5px] font-bold transition ${
+            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
               i < cur ? "bg-brand-100 text-brand-700 hover:bg-brand-200"
               : i === cur ? "bg-brand-600 text-white"
               : "bg-slate-100 text-slate-400 hover:bg-slate-200"
@@ -91,7 +91,7 @@ function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: str
           >
             {s.l}
           </button>
-          {i < STAGES.length - 1 && <div className={`h-0.5 w-1 ${i < cur ? "bg-brand-300" : "bg-slate-200"}`} />}
+          {i < STAGES.length - 1 && <div className={`h-0.5 w-3 ${i < cur ? "bg-brand-300" : "bg-slate-200"}`} />}
         </div>
       ))}
     </div>
@@ -448,8 +448,8 @@ export default function TradeModule({ config }: { config: Config }) {
                       {expandedId === r.id && (
                         <tr>
                           <td colSpan={9} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <div className="mb-1 text-xs font-semibold text-slate-600">📊 진행상황</div>
+                            <div className="flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                              <div className="shrink-0 text-sm font-semibold text-slate-600">📊 진행상황</div>
                               <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
                             </div>
                             <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
