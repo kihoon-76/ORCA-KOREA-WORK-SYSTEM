@@ -68,7 +68,14 @@ function EditableCell({ value, onCommit, type = "text", placeholder, className =
 
 // 날짜칸이 너무 넓어지는 걸 막기 위해, 평소에는 "MM-DD"만 짧게 보여주고
 // 클릭하면 그 자리에서 실제 날짜 입력칸(연도 포함)으로 바뀌어 고치고, 포커스를 벗어나면 다시 짧은 표시로 돌아간다.
-function CompactDateCell({ value, onCommit }: { value: string | null | undefined; onCommit: (v: string) => void }) {
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+function weekdayKo(v: string): string {
+  const [y, m, d] = v.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return WEEKDAY_KO[new Date(y, m - 1, d).getDay()] || "";
+}
+
+function CompactDateCell({ value, onCommit, showWeekday }: { value: string | null | undefined; onCommit: (v: string) => void; showWeekday?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(value ?? "");
   useEffect(() => { setV(value ?? ""); }, [value]);
@@ -91,7 +98,7 @@ function CompactDateCell({ value, onCommit }: { value: string | null | undefined
       className="w-full truncate rounded border border-transparent px-1 py-1 text-center text-xs text-slate-700 hover:border-slate-200 hover:bg-slate-50"
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
     >
-      {value ? value.slice(5) : <span className="text-slate-300">--</span>}
+      {value ? `${value.slice(5)}${showWeekday ? `(${weekdayKo(value)})` : ""}` : <span className="text-slate-300">--</span>}
     </button>
   );
 }
@@ -439,9 +446,9 @@ export default function TradeModule({ config }: { config: Config }) {
               <col style={{ width: 140 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 75 }} />
-              <col style={{ width: 190 }} />
-              <col style={{ width: 85 }} />
-              <col style={{ width: 90 }} />
+              <col style={{ width: 180 }} />
+              <col style={{ width: 92 }} />
+              <col style={{ width: 98 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
@@ -505,8 +512,8 @@ export default function TradeModule({ config }: { config: Config }) {
                             </select>
                           </div>
                         </td>
-                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.etd} onCommit={(v) => commitField(r, "etd", v)} /></td>
-                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.eta} onCommit={(v) => commitField(r, "eta", v)} /></td>
+                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.etd} onCommit={(v) => commitField(r, "etd", v)} showWeekday /></td>
+                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.eta} onCommit={(v) => commitField(r, "eta", v)} showWeekday /></td>
                         <td className="td text-right whitespace-nowrap px-1">
                           <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
                             <span className="material-symbols-outlined text-[16px]">delete</span>
