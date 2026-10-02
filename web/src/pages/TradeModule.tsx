@@ -66,6 +66,36 @@ function EditableCell({ value, onCommit, type = "text", placeholder, className =
   );
 }
 
+// 날짜칸이 너무 넓어지는 걸 막기 위해, 평소에는 "MM-DD"만 짧게 보여주고
+// 클릭하면 그 자리에서 실제 날짜 입력칸(연도 포함)으로 바뀌어 고치고, 포커스를 벗어나면 다시 짧은 표시로 돌아간다.
+function CompactDateCell({ value, onCommit }: { value: string | null | undefined; onCommit: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
+  if (editing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        className="w-full min-w-0 truncate rounded border border-brand-400 bg-white px-1 py-1 text-xs text-slate-700 focus:outline-none"
+        value={v}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => { setEditing(false); if (v !== (value ?? "")) onCommit(v); }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="w-full truncate rounded border border-transparent px-1 py-1 text-left text-xs text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+    >
+      {value ? value.slice(5) : <span className="text-slate-300">--</span>}
+    </button>
+  );
+}
+
 function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: string) => void }) {
   const cur = stageIdx(status);
   return (
@@ -232,6 +262,15 @@ export default function TradeModule({ config }: { config: Config }) {
   const [dateSort, setDateSort] = useState<{ key: "contract_date" | "etd" | "eta"; dir: "asc" | "desc" } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(new Set());
+  // BL번호/메모는 평소엔 숨겨두고, 클릭한 것만 펼쳐서 보여준다 (행 펼침칸이 너무 커지지 않도록)
+  const [openSubPanels, setOpenSubPanels] = useState<Set<string>>(new Set());
+  function toggleSubPanel(key: string) {
+    setOpenSubPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
 
   const lcLabel = config.lcLabel || "LC개설";
   const partnerFilterCols = [{ key: "material_name", label: "원료명" }, { key: config.partnerKey, label: config.partnerLabel }, { key: "lc_bank", label: lcLabel }];
@@ -380,14 +419,14 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: 108 }} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 100 }} />
-              <col style={{ width: 115 }} />
-              <col style={{ width: 72 }} />
-              <col style={{ width: 170 }} />
+              <col style={{ width: 60 }} />
+              <col style={{ width: 150 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 148 }} />
+              <col style={{ width: 155 }} />
+              <col style={{ width: 72 }} />
+              <col style={{ width: 238 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 78 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
@@ -419,7 +458,7 @@ export default function TradeModule({ config }: { config: Config }) {
                       <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                         onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
                         <td className="td overflow-hidden px-1">
-                          <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="text-xs" padX={2} />
+                          <CompactDateCell value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} />
                         </td>
                         <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
                         <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
@@ -448,8 +487,8 @@ export default function TradeModule({ config }: { config: Config }) {
                             </select>
                           </div>
                         </td>
-                        <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="text-xs" padX={2} /></td>
-                        <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="text-xs" padX={2} /></td>
+                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.etd} onCommit={(v) => commitField(r, "etd", v)} /></td>
+                        <td className="td overflow-hidden px-1"><CompactDateCell value={r.eta} onCommit={(v) => commitField(r, "eta", v)} /></td>
                         <td className="td text-right whitespace-nowrap px-1">
                           <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
                             <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -463,8 +502,24 @@ export default function TradeModule({ config }: { config: Config }) {
                               <div className="shrink-0 text-sm font-semibold text-slate-600">📊 진행상황</div>
                               <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
                             </div>
-                            <InlineField icon="🚢" label="BL번호" value={r.bl_no} placeholder="B/L 번호를 입력하세요" onCommit={(v) => commitField(r, "bl_no", v)} />
-                            <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
+                            <div className="mt-2 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                              <button type="button"
+                                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`bl_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
+                                onClick={() => toggleSubPanel(`bl_${r.id}`)}>
+                                🚢 BL번호{r.bl_no ? ` · ${r.bl_no}` : ""}
+                              </button>
+                              <button type="button"
+                                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`note_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
+                                onClick={() => toggleSubPanel(`note_${r.id}`)}>
+                                📝 메모{r.note ? " ✓" : ""}
+                              </button>
+                            </div>
+                            {openSubPanels.has(`bl_${r.id}`) && (
+                              <InlineField icon="🚢" label="BL번호" value={r.bl_no} placeholder="B/L 번호를 입력하세요" onCommit={(v) => commitField(r, "bl_no", v)} />
+                            )}
+                            {openSubPanels.has(`note_${r.id}`) && (
+                              <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
+                            )}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
