@@ -352,14 +352,13 @@ export default function TradeModule({ config }: { config: Config }) {
           <table className="table-compact w-full table-fixed">
             <colgroup>
               <col style={{ width: 108 }} />
-              <col style={{ width: 103 }} />
-              <col style={{ width: 93 }} />
-              <col style={{ width: 109 }} />
-              <col style={{ width: 70 }} />
-              <col style={{ width: 150 }} />
               <col style={{ width: 110 }} />
-              <col style={{ width: 118 }} />
-              <col style={{ width: 206 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 115 }} />
+              <col style={{ width: 72 }} />
+              <col style={{ width: 170 }} />
+              <col style={{ width: 140 }} />
+              <col style={{ width: 148 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
@@ -368,11 +367,11 @@ export default function TradeModule({ config }: { config: Config }) {
               <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
               <SortHeader label="ETD" active={dateSort?.key === "etd"} dir={dateSort?.key === "etd" ? dateSort.dir : null} onClick={() => toggleDateSort("etd")} />
               <SortHeader label="ETA" active={dateSort?.key === "eta"} dir={dateSort?.key === "eta" ? dateSort.dir : null} onClick={() => toggleDateSort("eta")} />
-              <th className="th truncate">진행상황</th><th className="th"></th>
+              <th className="th"></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td className="td text-center text-slate-400" colSpan={10}>조건에 맞는 데이터가 없습니다</td></tr>
+                <tr><td className="td text-center text-slate-400" colSpan={9}>조건에 맞는 데이터가 없습니다</td></tr>
               ) : filtered.map((r) => (
                 <Fragment key={r.id}>
                   <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
@@ -410,7 +409,6 @@ export default function TradeModule({ config }: { config: Config }) {
                     </td>
                     <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="text-xs" padX={2} /></td>
                     <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="text-xs" padX={2} /></td>
-                    <td className="td overflow-hidden"><StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} /></td>
                     <td className="td text-right whitespace-nowrap px-1">
                       <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -419,13 +417,17 @@ export default function TradeModule({ config }: { config: Config }) {
                   </tr>
                   {expandedId === r.id && (
                     <tr>
-                      <td colSpan={10} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                        <div className="grid gap-3 sm:grid-cols-3">
+                      <td colSpan={9} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <div className="mb-1 text-xs font-semibold text-slate-600">📊 진행상황</div>
+                          <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
+                        </div>
+                        <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
                           <AttachmentPanel entityType={config.entityType} entityId={r.id} category="settlement" label="💰 정산서류" />
                         </div>
-                        <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                       </td>
                     </tr>
                   )}
