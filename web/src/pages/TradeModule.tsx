@@ -33,13 +33,13 @@ function stageIdx(status: string) {
   return i >= 0 ? i : (LEGACY_STAGE[status] ?? 0);
 }
 
-function uniqueOptions(items: any[], key: string) {
+function uniqueOptions(items: any[], key: string, numeric = false) {
   const m = new Map<string, number>();
   for (const r of items) {
     const k = (r[key] || "").toString().trim();
     if (k) m.set(k, (m.get(k) || 0) + 1);
   }
-  return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+  return Array.from(m.entries()).sort((a, b) => numeric ? Number(a[0]) - Number(b[0]) : a[0].localeCompare(b[0], "ko"));
 }
 
 // 테이블 셀 바로 수정용 인라인 입력 (바깥 클릭으로 인한 행 펼치기 토글 방지 포함)
@@ -293,7 +293,13 @@ export default function TradeModule({ config }: { config: Config }) {
   }
 
   const lcLabel = config.lcLabel || "LC개설";
-  const partnerFilterCols = [{ key: "material_name", label: "원료명" }, { key: config.partnerKey, label: config.partnerLabel }, { key: "lc_bank", label: lcLabel }];
+  const partnerFilterCols = [
+    { key: "material_name", label: "원료명" },
+    { key: config.partnerKey, label: config.partnerLabel },
+    { key: "lc_bank", label: lcLabel },
+    { key: "quantity", label: "물량(MT)" },
+    { key: "unit_price", label: "단가" },
+  ];
 
   let filtered = items.filter((r: any) => {
     for (const f of partnerFilterCols) {
@@ -443,7 +449,8 @@ export default function TradeModule({ config }: { config: Config }) {
               <FilterHeader label="원료명" value={filters.material_name || ""} options={uniqueOptions(items, "material_name")} onChange={(v) => setFilters((p) => ({ ...p, material_name: v }))} />
               <FilterHeader label={config.partnerLabel} value={filters[config.partnerKey] || ""} options={uniqueOptions(items, config.partnerKey)} onChange={(v) => setFilters((p) => ({ ...p, [config.partnerKey]: v }))} />
               <FilterHeader label={lcLabel} value={filters.lc_bank || ""} options={uniqueOptions(items, "lc_bank")} onChange={(v) => setFilters((p) => ({ ...p, lc_bank: v }))} />
-              <th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
+              <FilterHeader label="물량(MT)" value={filters.quantity || ""} options={uniqueOptions(items, "quantity", true)} onChange={(v) => setFilters((p) => ({ ...p, quantity: v }))} />
+              <FilterHeader label="단가/총액" value={filters.unit_price || ""} options={uniqueOptions(items, "unit_price", true)} onChange={(v) => setFilters((p) => ({ ...p, unit_price: v }))} />
               <SortHeader label="ETD" active={dateSort?.key === "etd"} dir={dateSort?.key === "etd" ? dateSort.dir : null} onClick={() => toggleDateSort("etd")} />
               <SortHeader label="ETA" active={dateSort?.key === "eta"} dir={dateSort?.key === "eta" ? dateSort.dir : null} onClick={() => toggleDateSort("eta")} />
               <th className="th"></th>
