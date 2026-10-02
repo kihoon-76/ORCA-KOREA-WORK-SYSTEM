@@ -219,6 +219,7 @@ export default function TradeModule({ config }: { config: Config }) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dateSort, setDateSort] = useState<{ key: "etd" | "eta"; dir: "asc" | "desc" } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [collapsedStages, setCollapsedStages] = useState<Set<number>>(new Set());
 
   const lcLabel = config.lcLabel || "LC개설";
   const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...filterCols(lcLabel)];
@@ -243,10 +244,18 @@ export default function TradeModule({ config }: { config: Config }) {
   }
 
   // 진행상황 단계별로 묶어서 보여준다 (각 묶음 제목은 "계약 - 선적 - ... - 현재단계" 형태)
-  const groups: { label: string; rows: any[] }[] = [];
+  const groups: { idx: number; stageLabel: string; label: string; rows: any[] }[] = [];
   for (let i = 0; i < STAGES.length; i++) {
     const rows = filtered.filter((r: any) => stageIdx(r.status) === i);
-    if (rows.length) groups.push({ label: STAGES.slice(0, i + 1).map((s) => s.l).join(" - "), rows });
+    if (rows.length) groups.push({ idx: i, stageLabel: STAGES[i].l, label: STAGES.slice(0, i + 1).map((s) => s.l).join(" - "), rows });
+  }
+
+  function toggleStageCollapsed(idx: number) {
+    setCollapsedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
   }
 
   function toggleDateSort(key: "etd" | "eta") {
@@ -380,14 +389,20 @@ export default function TradeModule({ config }: { config: Config }) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td className="td text-center text-slate-400" colSpan={9}>조건에 맞는 데이터가 없습니다</td></tr>
-              ) : groups.map((g) => (
-                <Fragment key={g.label}>
-                  <tr>
-                    <td colSpan={9} className="bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700">
-                      {g.label} <span className="font-normal text-slate-400">({g.rows.length}건)</span>
+              ) : groups.map((g) => {
+                const collapsed = collapsedStages.has(g.idx);
+                return (
+                <Fragment key={g.idx}>
+                  <tr className="cursor-pointer bg-brand-100 hover:bg-brand-200" onClick={() => toggleStageCollapsed(g.idx)}>
+                    <td colSpan={9} className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`material-symbols-outlined text-[18px] text-brand-700 transition-transform ${collapsed ? "-rotate-90" : ""}`}>expand_more</span>
+                        <span className="text-sm font-bold text-brand-800">{g.label}</span>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-brand-700">{g.rows.length}건</span>
+                      </div>
                     </td>
                   </tr>
-                  {g.rows.map((r) => (
+                  {!collapsed && g.rows.map((r) => (
                     <Fragment key={r.id}>
                       <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                         onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
@@ -449,7 +464,8 @@ export default function TradeModule({ config }: { config: Config }) {
                     </Fragment>
                   ))}
                 </Fragment>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           </div>
