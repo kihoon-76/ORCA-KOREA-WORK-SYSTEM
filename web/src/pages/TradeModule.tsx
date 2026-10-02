@@ -150,7 +150,6 @@ function AttachmentPanel({ entityType, entityId, category, label }:
   { entityType: string; entityId: number; category: string; label: string }) {
   const [files, setFiles] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
-  const [desc, setDesc] = useState("");
 
   function load() {
     api.get(`/files/list?entity_type=${entityType}&entity_id=${entityId}&category=${category}`)
@@ -163,8 +162,7 @@ function AttachmentPanel({ entityType, entityId, category, label }:
     if (!list || list.length === 0) return;
     setBusy(true);
     try {
-      for (const file of Array.from(list)) await api.upload(file, entityType, entityId, category, desc);
-      setDesc("");
+      for (const file of Array.from(list)) await api.upload(file, entityType, entityId, category);
       load();
     } catch (err: any) {
       alert(err.message);
@@ -191,8 +189,6 @@ function AttachmentPanel({ entityType, entityId, category, label }:
           <input type="file" multiple className="hidden" onChange={onUpload} disabled={busy} />
         </label>
       </div>
-      <input className="input mb-2 w-full text-xs" placeholder="파일 설명 (예: 선하증권 원본)"
-        value={desc} onChange={(e) => setDesc(e.target.value)} />
       {files.length === 0 ? (
         <p className="text-xs text-slate-400">첨부된 파일이 없습니다</p>
       ) : (
