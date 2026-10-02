@@ -96,6 +96,24 @@ function CompactDateCell({ value, onCommit }: { value: string | null | undefined
   );
 }
 
+// 열 제목 자리에 바로 필터 드롭다운을 넣어서, 위에 따로 필터줄을 두지 않고 한 줄로 합친다
+function FilterHeader({ label, value, options, onChange }:
+  { label: string; value: string; options: [string, number][]; onChange: (v: string) => void }) {
+  const active = !!value;
+  return (
+    <th className={`th truncate p-0 ${active ? "bg-brand-50" : ""}`}>
+      <select
+        className={`w-full cursor-pointer truncate border-0 bg-transparent px-2.5 py-2.5 text-left mono-label focus:outline-none focus:ring-1 focus:ring-inset focus:ring-brand-400 ${active ? "text-brand-700" : "text-on-surface-variant"}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{label}</option>
+        {options.map(([name, count]) => <option key={name} value={name}>{name} ({count})</option>)}
+      </select>
+    </th>
+  );
+}
+
 function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: string) => void }) {
   const cur = stageIdx(status);
   return (
@@ -396,27 +414,16 @@ export default function TradeModule({ config }: { config: Config }) {
         } />
       {loading ? <Spinner /> : items.length === 0 ? <Empty /> : (
         <div className="card">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
-            {partnerFilterCols.map((f) => {
-              const opts = uniqueOptions(items, f.key);
-              if (opts.length === 0) return null;
-              return (
-                <select key={f.key} className="input max-w-[11rem] text-xs"
-                  value={filters[f.key] || ""} onChange={(e) => setFilters((p) => ({ ...p, [f.key]: e.target.value }))}>
-                  <option value="">{f.label} (전체)</option>
-                  {opts.map(([name, count]) => <option key={name} value={name}>{name} ({count})</option>)}
-                </select>
-              );
-            })}
-            <select className="input max-w-[9rem] text-xs" value={filters.status || ""}
+          <div className="flex items-center gap-3 px-4 py-1.5 text-xs text-slate-400">
+            <select className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-600" value={filters.status || ""}
               onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
               <option value="">진행상황 (전체)</option>
               {STAGES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
             </select>
             {activeFilterCount > 0 && (
-              <button className="text-xs text-brand-600 hover:underline" onClick={() => setFilters({})}>필터 초기화</button>
+              <button className="text-brand-600 hover:underline" onClick={() => setFilters({})}>필터 초기화</button>
             )}
-            <span className="ml-auto text-xs text-slate-400">{filtered.length}건 표시 (전체 {items.length}건)</span>
+            <span className="ml-auto">{filtered.length}건 표시 (전체 {items.length}건)</span>
           </div>
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
@@ -433,8 +440,10 @@ export default function TradeModule({ config }: { config: Config }) {
             </colgroup>
             <thead><tr className="bg-slate-50">
               <SortHeader label="계약일자" active={dateSort?.key === "contract_date"} dir={dateSort?.key === "contract_date" ? dateSort.dir : null} onClick={() => toggleDateSort("contract_date")} />
-              <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
-              <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
+              <FilterHeader label="원료명" value={filters.material_name || ""} options={uniqueOptions(items, "material_name")} onChange={(v) => setFilters((p) => ({ ...p, material_name: v }))} />
+              <FilterHeader label={config.partnerLabel} value={filters[config.partnerKey] || ""} options={uniqueOptions(items, config.partnerKey)} onChange={(v) => setFilters((p) => ({ ...p, [config.partnerKey]: v }))} />
+              <FilterHeader label={lcLabel} value={filters.lc_bank || ""} options={uniqueOptions(items, "lc_bank")} onChange={(v) => setFilters((p) => ({ ...p, lc_bank: v }))} />
+              <th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
               <SortHeader label="ETD" active={dateSort?.key === "etd"} dir={dateSort?.key === "etd" ? dateSort.dir : null} onClick={() => toggleDateSort("etd")} />
               <SortHeader label="ETA" active={dateSort?.key === "eta"} dir={dateSort?.key === "eta" ? dateSort.dir : null} onClick={() => toggleDateSort("eta")} />
               <th className="th"></th>
