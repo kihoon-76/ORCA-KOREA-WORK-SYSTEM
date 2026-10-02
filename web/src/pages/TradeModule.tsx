@@ -184,15 +184,15 @@ function AttachmentPanel({ entityType, entityId, category, label }:
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="mb-2 text-xs font-semibold text-slate-600">{label}</div>
-      <div className="mb-2 flex gap-2">
-        <input className="input flex-1 text-xs" placeholder="파일 설명 (예: 선하증권 원본)"
-          value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <label className="btn-secondary cursor-pointer whitespace-nowrap px-2.5 py-1.5 text-xs">
-          {busy ? "업로드중..." : "파일 추가 (여러개 가능)"}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-slate-600">{label}</div>
+        <label className="btn-secondary cursor-pointer whitespace-nowrap px-2 py-1 text-xs">
+          {busy ? "업로드중..." : "+ 파일 추가"}
           <input type="file" multiple className="hidden" onChange={onUpload} disabled={busy} />
         </label>
       </div>
+      <input className="input mb-2 w-full text-xs" placeholder="파일 설명 (예: 선하증권 원본)"
+        value={desc} onChange={(e) => setDesc(e.target.value)} />
       {files.length === 0 ? (
         <p className="text-xs text-slate-400">첨부된 파일이 없습니다</p>
       ) : (
