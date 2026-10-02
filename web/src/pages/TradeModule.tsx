@@ -437,12 +437,12 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: 70 }} />
+              <col style={{ width: 92 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 95 }} />
-              <col style={{ width: 160 }} />
+              <col style={{ width: 138 }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 98 }} />
               <col style={{ width: 36 }} />
@@ -479,7 +479,7 @@ export default function TradeModule({ config }: { config: Config }) {
                       <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                         onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
                         <td className="td overflow-hidden px-1">
-                          <CompactDateCell value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} />
+                          <CompactDateCell value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} showWeekday />
                         </td>
                         <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
                         <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
