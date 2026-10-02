@@ -6,8 +6,8 @@ import { pick, insertRow, updateRow, deleteRow } from "../crud";
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use("*", authMiddleware);
 
-const IMPORT_COLS = ["ref_no","contract_date","material_id","material_name","supplier","lc_bank","lc_no","quantity","unit","unit_price","total_price","currency","incoterms","payment_type","vessel","etd","eta","status","note"];
-const EXPORT_COLS = ["ref_no","contract_date","material_id","material_name","buyer","lc_bank","lc_no","quantity","unit","unit_price","total_price","currency","incoterms","payment_type","vessel","etd","eta","status","note"];
+const IMPORT_COLS = ["ref_no","contract_date","material_id","material_name","supplier","lc_bank","lc_no","bl_no","quantity","unit","unit_price","total_price","currency","incoterms","payment_type","vessel","etd","eta","status","note"];
+const EXPORT_COLS = ["ref_no","contract_date","material_id","material_name","buyer","lc_bank","lc_no","bl_no","quantity","unit","unit_price","total_price","currency","incoterms","payment_type","vessel","etd","eta","status","note"];
 
 function withTotal(data: Record<string, any>) {
   if (data.total_price == null && data.quantity != null && data.unit_price != null) {

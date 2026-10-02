@@ -191,6 +191,25 @@ function NoteBox({ value, onCommit }: { value: string | null | undefined; onComm
   );
 }
 
+// 행을 펼쳤을 때 보이는 한 줄짜리 입력 필드 (예: BL번호)
+function InlineField({ icon, label, value, placeholder, onCommit }:
+  { icon: string; label: string; value: string | null | undefined; placeholder?: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-1 text-xs font-semibold text-slate-600">{icon} {label}</div>
+      <input
+        className="input text-xs"
+        placeholder={placeholder}
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => { if (v !== (value ?? "")) onCommit(v); }}
+      />
+    </div>
+  );
+}
+
 // 클릭해서 정렬할 수 있는 열 제목 — 항상 보이는 정렬 아이콘 버튼으로 정렬 가능함을 뚜렷하게 표시
 function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: "asc" | "desc" | null; onClick: () => void }) {
   return (
@@ -413,7 +432,6 @@ export default function TradeModule({ config }: { config: Config }) {
                         <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
                         <td className="td">
                           <EditableCell value={r.lc_bank} onCommit={(v) => commitField(r, "lc_bank", v)} />
-                          <EditableCell value={r.lc_no} placeholder="LC번호" onCommit={(v) => commitField(r, "lc_no", v)} className="text-xs text-slate-400" />
                         </td>
                         <td className="td">
                           <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-full" />
@@ -452,6 +470,7 @@ export default function TradeModule({ config }: { config: Config }) {
                               <div className="shrink-0 text-sm font-semibold text-slate-600">📊 진행상황</div>
                               <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
                             </div>
+                            <InlineField icon="🚢" label="BL번호" value={r.bl_no} placeholder="B/L 번호를 입력하세요" onCommit={(v) => commitField(r, "bl_no", v)} />
                             <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />

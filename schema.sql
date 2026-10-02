@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS imports (
   supplier      TEXT,                 -- 공급사(수출자)
   lc_bank       TEXT,                 -- LC 개설은행/회사
   lc_no         TEXT,
+  bl_no         TEXT,                 -- B/L(선하증권) 번호
   quantity      REAL,                 -- 수입 물량
   unit          TEXT DEFAULT 'MT',
   unit_price    REAL,                 -- 단가
@@ -207,6 +208,7 @@ CREATE TABLE IF NOT EXISTS exports (
   buyer         TEXT,                 -- 수입자(바이어)
   lc_bank       TEXT,                 -- LC 개설은행/회사
   lc_no         TEXT,
+  bl_no         TEXT,                 -- B/L(선하증권) 번호
   quantity      REAL,
   unit          TEXT DEFAULT 'MT',
   unit_price    REAL,
