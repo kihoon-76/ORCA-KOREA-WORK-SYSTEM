@@ -88,7 +88,7 @@ function CompactDateCell({ value, onCommit }: { value: string | null | undefined
   return (
     <button
       type="button"
-      className="w-full truncate rounded border border-transparent px-1 py-1 text-left text-xs text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+      className="w-full truncate rounded border border-transparent px-1 py-1 text-center text-xs text-slate-700 hover:border-slate-200 hover:bg-slate-50"
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
     >
       {value ? value.slice(5) : <span className="text-slate-300">--</span>}
@@ -174,14 +174,16 @@ function AttachmentPanel({ entityType, entityId, category, label }:
         <ul className="space-y-1">
           {files.map((f) => (
             <li key={f.id} className="flex items-center gap-2 rounded bg-slate-50 px-2 py-1.5 text-xs">
-              <button className="shrink-0 max-w-[32%] truncate text-brand-600 hover:underline" onClick={() => api.preview(f.id)} title={`${f.file_name} (클릭하면 미리보기)`}>
-                {f.file_name}
-              </button>
-              <button className="shrink-0 text-slate-400 hover:text-brand-600" onClick={() => api.download(f.id, f.file_name)} title="다운로드">
-                ⬇
-              </button>
+              <div className="flex w-1/2 min-w-0 items-center gap-1">
+                <button className="min-w-0 flex-1 truncate text-left text-brand-600 hover:underline" onClick={() => api.preview(f.id)} title={`${f.file_name} (클릭하면 미리보기)`}>
+                  {f.file_name}
+                </button>
+                <button className="shrink-0 text-slate-400 hover:text-brand-600" onClick={() => api.download(f.id, f.file_name)} title="다운로드">
+                  ⬇
+                </button>
+              </div>
               <input
-                className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-500 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none"
+                className="w-1/2 min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-500 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:outline-none"
                 defaultValue={f.description || ""}
                 placeholder="이 파일에 대한 설명 추가"
                 onClick={(e) => e.stopPropagation()}
@@ -419,14 +421,14 @@ export default function TradeModule({ config }: { config: Config }) {
           <div className="overflow-x-auto">
           <table className="table-compact w-full table-fixed">
             <colgroup>
-              <col style={{ width: 60 }} />
+              <col style={{ width: 70 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 155 }} />
-              <col style={{ width: 72 }} />
-              <col style={{ width: 238 }} />
-              <col style={{ width: 70 }} />
-              <col style={{ width: 78 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 75 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 85 }} />
+              <col style={{ width: 90 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
