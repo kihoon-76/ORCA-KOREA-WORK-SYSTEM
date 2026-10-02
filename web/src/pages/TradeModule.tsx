@@ -22,11 +22,12 @@ const STAGES = [
   { v: "shipped", l: "선적" },
   { v: "customs", l: "통관" },
   { v: "stored", l: "입고" },
+  { v: "processed", l: "가공" },
   { v: "released", l: "출고" },
-  { v: "settled", l: "정산완료" },
+  { v: "settled", l: "정산" },
 ];
 // 예전 상태값(도착/통관입고/멜팅/완료 등)도 파이프라인 어딘가에 매칭되도록
-const LEGACY_STAGE: Record<string, number> = { arrived: 1, cleared: 3, melt_in: 2, melt_out: 3, delivered: 5, done: 5 };
+const LEGACY_STAGE: Record<string, number> = { arrived: 1, cleared: 3, melt_in: 4, melt_out: 4, delivered: 6, done: 6 };
 function stageIdx(status: string) {
   const i = STAGES.findIndex((s) => s.v === status);
   return i >= 0 ? i : (LEGACY_STAGE[status] ?? 0);
@@ -241,6 +242,13 @@ export default function TradeModule({ config }: { config: Config }) {
     });
   }
 
+  // 진행상황 단계별로 묶어서 보여준다 (각 묶음 제목은 "계약 - 선적 - ... - 현재단계" 형태)
+  const groups: { label: string; rows: any[] }[] = [];
+  for (let i = 0; i < STAGES.length; i++) {
+    const rows = filtered.filter((r: any) => stageIdx(r.status) === i);
+    if (rows.length) groups.push({ label: STAGES.slice(0, i + 1).map((s) => s.l).join(" - "), rows });
+  }
+
   function toggleDateSort(key: "etd" | "eta") {
     setDateSort((s) => {
       if (!s || s.key !== key) return { key, dir: "asc" };
@@ -372,65 +380,74 @@ export default function TradeModule({ config }: { config: Config }) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td className="td text-center text-slate-400" colSpan={9}>조건에 맞는 데이터가 없습니다</td></tr>
-              ) : filtered.map((r) => (
-                <Fragment key={r.id}>
-                  <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                    onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
-                    <td className="td overflow-hidden px-1">
-                      <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="text-xs" padX={2} />
-                    </td>
-                    <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
-                    <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
-                    <td className="td">
-                      <EditableCell value={r.lc_bank} onCommit={(v) => commitField(r, "lc_bank", v)} />
-                      <EditableCell value={r.lc_no} placeholder="LC번호" onCommit={(v) => commitField(r, "lc_no", v)} className="text-xs text-slate-400" />
-                    </td>
-                    <td className="td">
-                      <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-full" />
-                    </td>
-                    <td className="td overflow-hidden">
-                      <div className="flex items-center gap-1">
-                        <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} width={44} />
-                        <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} width={70} />
-                      </div>
-                      <div className="truncate px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
-                      <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
-                        <select className="w-[52px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
-                          value={r.incoterms || ""} onChange={(e) => commitField(r, "incoterms", e.target.value)}>
-                          <option value="">조건</option>
-                          {INCOTERMS.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                        <select className="w-[48px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
-                          value={r.payment_type || ""} onChange={(e) => commitField(r, "payment_type", e.target.value)}>
-                          <option value="">결제</option>
-                          {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                    </td>
-                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="text-xs" padX={2} /></td>
-                    <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="text-xs" padX={2} /></td>
-                    <td className="td text-right whitespace-nowrap px-1">
-                      <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
-                        <span className="material-symbols-outlined text-[16px]">delete</span>
-                      </button>
+              ) : groups.map((g) => (
+                <Fragment key={g.label}>
+                  <tr>
+                    <td colSpan={9} className="bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700">
+                      {g.label} <span className="font-normal text-slate-400">({g.rows.length}건)</span>
                     </td>
                   </tr>
-                  {expandedId === r.id && (
-                    <tr>
-                      <td colSpan={9} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <div className="mb-1 text-xs font-semibold text-slate-600">📊 진행상황</div>
-                          <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
-                        </div>
-                        <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
-                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
-                          <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
-                          <AttachmentPanel entityType={config.entityType} entityId={r.id} category="settlement" label="💰 정산서류" />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                  {g.rows.map((r) => (
+                    <Fragment key={r.id}>
+                      <tr className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+                        onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
+                        <td className="td overflow-hidden px-1">
+                          <EditableCell type="date" value={r.contract_date} onCommit={(v) => commitField(r, "contract_date", v)} className="text-xs" padX={2} />
+                        </td>
+                        <td className="td"><EditableCell value={r.material_name} onCommit={(v) => commitField(r, "material_name", v)} className="font-medium" /></td>
+                        <td className="td"><EditableCell value={r[config.partnerKey]} onCommit={(v) => commitField(r, config.partnerKey, v)} /></td>
+                        <td className="td">
+                          <EditableCell value={r.lc_bank} onCommit={(v) => commitField(r, "lc_bank", v)} />
+                          <EditableCell value={r.lc_no} placeholder="LC번호" onCommit={(v) => commitField(r, "lc_no", v)} className="text-xs text-slate-400" />
+                        </td>
+                        <td className="td">
+                          <EditableCell type="number" value={r.quantity} onCommit={(v) => commitField(r, "quantity", v)} className="w-full" />
+                        </td>
+                        <td className="td overflow-hidden">
+                          <div className="flex items-center gap-1">
+                            <EditableCell value={r.currency} onCommit={(v) => commitField(r, "currency", v)} width={44} />
+                            <EditableCell type="number" value={r.unit_price} onCommit={(v) => commitField(r, "unit_price", v)} width={70} />
+                          </div>
+                          <div className="truncate px-1.5 text-xs text-slate-400">{r.total_price ? `총 ${r.currency} ${fmt(r.total_price)}` : ""}</div>
+                          <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
+                            <select className="w-[52px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
+                              value={r.incoterms || ""} onChange={(e) => commitField(r, "incoterms", e.target.value)}>
+                              <option value="">조건</option>
+                              {INCOTERMS.map((v) => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                            <select className="w-[48px] shrink-0 rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[10px] text-slate-600"
+                              value={r.payment_type || ""} onChange={(e) => commitField(r, "payment_type", e.target.value)}>
+                              <option value="">결제</option>
+                              {PAYMENT_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </div>
+                        </td>
+                        <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.etd} onCommit={(v) => commitField(r, "etd", v)} className="text-xs" padX={2} /></td>
+                        <td className="td overflow-hidden px-1"><EditableCell type="date" value={r.eta} onCommit={(v) => commitField(r, "eta", v)} className="text-xs" padX={2} /></td>
+                        <td className="td text-right whitespace-nowrap px-1">
+                          <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedId === r.id && (
+                        <tr>
+                          <td colSpan={9} className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <div className="mb-1 text-xs font-semibold text-slate-600">📊 진행상황</div>
+                              <StagePipeline status={r.status} onSelect={(v) => setStage(r, v)} />
+                            </div>
+                            <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
+                            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                              <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
+                              <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
+                              <AttachmentPanel entityType={config.entityType} entityId={r.id} category="settlement" label="💰 정산서류" />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
                 </Fragment>
               ))}
             </tbody>
