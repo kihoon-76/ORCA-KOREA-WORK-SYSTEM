@@ -33,13 +33,6 @@ function stageIdx(status: string) {
   return i >= 0 ? i : (LEGACY_STAGE[status] ?? 0);
 }
 
-function filterCols(lcLabel: string): { key: string; label: string }[] {
-  return [
-    { key: "material_name", label: "원료명" },
-    { key: "lc_bank", label: lcLabel },
-  ];
-}
-
 function uniqueOptions(items: any[], key: string) {
   const m = new Map<string, number>();
   for (const r of items) {
@@ -236,12 +229,12 @@ export default function TradeModule({ config }: { config: Config }) {
   const [open, setOpen] = useState(false);
   const [row, setRow] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [dateSort, setDateSort] = useState<{ key: "etd" | "eta"; dir: "asc" | "desc" } | null>(null);
+  const [dateSort, setDateSort] = useState<{ key: "contract_date" | "etd" | "eta"; dir: "asc" | "desc" } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(new Set());
 
   const lcLabel = config.lcLabel || "LC개설";
-  const partnerFilterCols = [{ key: config.partnerKey, label: config.partnerLabel }, ...filterCols(lcLabel)];
+  const partnerFilterCols = [{ key: "material_name", label: "원료명" }, { key: config.partnerKey, label: config.partnerLabel }, { key: "lc_bank", label: lcLabel }];
 
   let filtered = items.filter((r: any) => {
     for (const f of partnerFilterCols) {
@@ -277,7 +270,7 @@ export default function TradeModule({ config }: { config: Config }) {
     });
   }
 
-  function toggleDateSort(key: "etd" | "eta") {
+  function toggleDateSort(key: "contract_date" | "etd" | "eta") {
     setDateSort((s) => {
       if (!s || s.key !== key) return { key, dir: "asc" };
       if (s.dir === "asc") return { key, dir: "desc" };
@@ -398,7 +391,7 @@ export default function TradeModule({ config }: { config: Config }) {
               <col style={{ width: 36 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
-              <th className="th truncate">계약일자</th>
+              <SortHeader label="계약일자" active={dateSort?.key === "contract_date"} dir={dateSort?.key === "contract_date" ? dateSort.dir : null} onClick={() => toggleDateSort("contract_date")} />
               <th className="th truncate">원료명</th><th className="th truncate">{config.partnerLabel}</th>
               <th className="th truncate">{lcLabel}</th><th className="th truncate">물량(MT)</th><th className="th truncate">단가/총액</th>
               <SortHeader label="ETD" active={dateSort?.key === "etd"} dir={dateSort?.key === "etd" ? dateSort.dir : null} onClick={() => toggleDateSort("etd")} />
