@@ -2,9 +2,20 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { Spinner, Icon, Badge } from "../components/ui";
+import { Spinner, Icon, Badge, Modal } from "../components/ui";
 import { ApprovalCreateModal, ApprovalDetailModal } from "./Approvals";
 import { parseTripReportContent, tripPeriod } from "../tripReport";
+import { AttachmentPanel } from "./TradeModule";
+
+// ETD/ETA처럼 "10-02(금)" 형식으로 날짜 + 요일을 함께 보여준다 (원료 수입/수출현황과 동일한 표기 방식)
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+function formatDateWithWeekday(v: string | null | undefined): string {
+  if (!v) return "-";
+  const [y, m, d] = v.split("-").map(Number);
+  if (!y || !m || !d) return v;
+  const w = WEEKDAY_KO[new Date(y, m - 1, d).getDay()];
+  return `${v.slice(5)}${w ? `(${w})` : ""}`;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -16,6 +27,8 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
+  // 다가오는 선박 일정에서 행 클릭 시 해당 건의 첨부파일을 바로 보여주기 위한 상태
+  const [filesFor, setFilesFor] = useState<any>(null);
 
   function loadTripReports() {
     api.get("/approvals?doc_type=trip_report&limit=6").then((r) => setTripReports(r.items || [])).catch(() => {});
@@ -77,13 +90,13 @@ export default function Dashboard() {
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {data.upcoming_shipments.map((s: any, i: number) => (
-                    <tr key={i} className="transition-colors hover:bg-surface-container-low">
+                    <tr key={i} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setFilesFor(s)} title="클릭하면 첨부파일 보기">
                       <td className="td"><span className="mr-1 text-xs text-on-surface-variant">{s.kind === "import" ? "수입" : "수출"}</span><Badge value={s.status} /></td>
                       <td className="td font-bold">{s.material_name}</td>
                       <td className="td">{s.partner || "-"}</td>
                       <td className="td">{s.quantity != null ? `${Number(s.quantity).toLocaleString()} ${s.unit || "MT"}` : "-"}</td>
-                      <td className="td font-mono text-xs">{s.etd || "-"}</td>
-                      <td className="td font-mono text-xs">{s.eta}</td>
+                      <td className="td font-mono text-xs">{formatDateWithWeekday(s.etd)}</td>
+                      <td className="td font-mono text-xs">{formatDateWithWeekday(s.eta)}</td>
                       <td className="td">{s.lc_bank || "-"}{s.lc_no ? <div className="text-xs text-on-surface-variant">{s.lc_no}</div> : null}</td>
                     </tr>
                   ))}
@@ -157,6 +170,19 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {filesFor && (
+        <Modal open={!!filesFor} onClose={() => setFilesFor(null)} title={`📎 ${filesFor.material_name} 첨부파일`} wide>
+          <p className="mb-3 text-xs text-on-surface-variant">
+            {filesFor.kind === "import" ? "수입" : "수출"} · {filesFor.partner || "-"}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="contract" label="📄 계약서" />
+            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="shipping_docs" label="🚢 선적서류" />
+            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="settlement" label="💰 정산서류" />
+          </div>
+        </Modal>
+      )}
 
       {(creating || editItem) && (
         <ApprovalCreateModal docType="trip_report" editItem={editItem}

@@ -146,7 +146,7 @@ function StagePipeline({ status, onSelect }: { status: string; onSelect: (v: str
   );
 }
 
-function AttachmentPanel({ entityType, entityId, category, label }:
+export function AttachmentPanel({ entityType, entityId, category, label }:
   { entityType: string; entityId: number; category: string; label: string }) {
   const [files, setFiles] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
