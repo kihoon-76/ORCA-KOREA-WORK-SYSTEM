@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { PageHeader, Spinner, Empty, Modal, Field, useList } from "../components/ui";
 
@@ -150,6 +150,10 @@ export function AttachmentPanel({ entityType, entityId, category, label }:
   { entityType: string; entityId: number; category: string; label: string }) {
   const [files, setFiles] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  // 패널 전체에 드래그 중일 때는 자식 요소(li 등)를 넘나들 때마다 dragenter/dragleave가 반복 발생해서
+  // 카운터로 중첩 횟수를 세어, 0으로 돌아왔을 때만 드래그오버 표시를 꺼준다.
+  const dragCounter = useRef(0);
 
   function load() {
     api.get(`/files/list?entity_type=${entityType}&entity_id=${entityId}&category=${category}`)
@@ -157,19 +161,45 @@ export function AttachmentPanel({ entityType, entityId, category, label }:
   }
   useEffect(load, [entityType, entityId, category]);
 
-  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const list = e.target.files;
-    if (!list || list.length === 0) return;
+  async function uploadFiles(list: FileList | File[]) {
+    const arr = Array.from(list);
+    if (arr.length === 0) return;
     setBusy(true);
     try {
-      for (const file of Array.from(list)) await api.upload(file, entityType, entityId, category);
+      for (const file of arr) await api.upload(file, entityType, entityId, category);
       load();
     } catch (err: any) {
       alert(err.message);
     } finally {
       setBusy(false);
-      e.target.value = "";
     }
+  }
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    await uploadFiles(list);
+    e.target.value = "";
+  }
+  function onDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) {
+      dragCounter.current++;
+      setDragOver(true);
+    }
+  }
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+  function onDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setDragOver(false);
+  }
+  async function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragOver(false);
+    if (e.dataTransfer.files?.length) await uploadFiles(e.dataTransfer.files);
   }
   async function updateDesc(id: number, d: string) {
     try { await api.put(`/files/${id}`, { description: d }); load(); } catch (err: any) { alert(err.message); }
@@ -181,7 +211,13 @@ export function AttachmentPanel({ entityType, entityId, category, label }:
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div
+      className={`rounded-lg border p-3 transition-colors ${dragOver ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-white"}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-xs font-semibold text-slate-600">{label}</div>
         <label className="btn-secondary cursor-pointer whitespace-nowrap px-2 py-1 text-xs">
@@ -189,7 +225,11 @@ export function AttachmentPanel({ entityType, entityId, category, label }:
           <input type="file" multiple className="hidden" onChange={onUpload} disabled={busy} />
         </label>
       </div>
-      {files.length === 0 ? (
+      {dragOver ? (
+        <p className="pointer-events-none rounded border-2 border-dashed border-brand-400 py-3 text-center text-xs font-semibold text-brand-600">
+          여기에 파일을 놓으면 업로드됩니다
+        </p>
+      ) : files.length === 0 ? (
         <p className="text-xs text-slate-400">첨부된 파일이 없습니다</p>
       ) : (
         <ul className="space-y-1">
