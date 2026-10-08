@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { api, getToken } from "../api";
 import { PageHeader, Spinner, Empty, Modal, Field, useList } from "../components/ui";
-import { SPEC_ITEMS, judgeItem, judgeSiAlFeGroup, recommendedAction, summarize } from "../qualitySpec";
+import { SPEC_ITEMS, judgeItem, judgeSiAlFeGroup, recommendedAction, summarize, type SpecItem } from "../qualitySpec";
 
 interface Config {
   kind: "import" | "export";
@@ -425,18 +425,22 @@ function CoaPanel({ entityType, entityId }: { entityType: string; entityId: numb
   );
 }
 
-function QualityPanel({ entityType, entityId }: { entityType: string; entityId: number }) {
+function QualityPanel({ entityType, entityId, draft, onDraftChange }:
+  { entityType: string; entityId: number; draft?: Record<string, string>; onDraftChange?: (m: Record<string, string>) => void }) {
   const [history, setHistory] = useState<any[]>([]);
-  const [measured, setMeasured] = useState<Record<string, string>>({});
+  // 같은 행의 원가계산 패널이 함께 열려 있을 때 끊김 없이 이어 쓸 수 있도록, 입력 중인 값은 draft로도 받아서 시작한다
+  const [measured, setMeasured] = useState<Record<string, string>>(draft || {});
   const [saving, setSaving] = useState(false);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(!!draft);
 
   function load() {
     api.get(`/calc/quality?entity_type=${entityType}&entity_id=${entityId}`).then((r) => {
       const items = r.items || [];
       setHistory(items);
       if (!loadedOnce && items[0]) {
-        setMeasured(Object.fromEntries(Object.entries(items[0].measured).map(([k, v]) => [k, String(v)])));
+        const m = Object.fromEntries(Object.entries(items[0].measured).map(([k, v]) => [k, String(v)]));
+        setMeasured(m);
+        onDraftChange?.(m);
       }
       setLoadedOnce(true);
     });
@@ -444,10 +448,16 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
   useEffect(load, [entityType, entityId]);
 
   function setVal(key: string, v: string) {
-    setMeasured((p) => ({ ...p, [key]: v }));
+    setMeasured((p) => {
+      const next = { ...p, [key]: v };
+      onDraftChange?.(next);
+      return next;
+    });
   }
   function loadFrom(h: any) {
-    setMeasured(Object.fromEntries(Object.entries(h.measured).map(([k, v]) => [k, String(v)])));
+    const m = Object.fromEntries(Object.entries(h.measured).map(([k, v]) => [k, String(v)]));
+    setMeasured(m);
+    onDraftChange?.(m);
   }
 
   const summary = summarize(measured);
@@ -487,15 +497,18 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
         </div>
       </div>
       <CoaPanel entityType={entityType} entityId={entityId} />
-      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-        {SPEC_ITEMS.map((spec) => {
+      {(() => {
+        // 1열을 끝까지 다 채운 다음 2열로 넘어가도록(가로로 번갈아 섞이지 않게) 배열을 반으로 나눠서 각자 렌더링한다
+        const mid = Math.ceil(SPEC_ITEMS.length / 2);
+        const columns = [SPEC_ITEMS.slice(0, mid), SPEC_ITEMS.slice(mid)];
+        const renderRow = (spec: SpecItem) => {
           const isSiAlFe = spec.group === "si_al_fe";
           const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
           const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
           return (
-            <div key={spec.key} className="flex items-center gap-1 border-b border-slate-50 py-1 text-[11px]">
-              <span className="w-[76px] shrink-0 truncate font-semibold text-slate-700" title={spec.item}>{spec.abbr}</span>
-              <span className="w-[96px] shrink-0 truncate text-slate-400" title={spec.specLabel}>{spec.specLabel}</span>
+            <div key={spec.key} className="flex items-center gap-1.5 border-b border-slate-50 py-1 text-[11px]">
+              <span className="w-[130px] shrink-0 whitespace-nowrap font-semibold text-slate-700" title={spec.item}>{spec.abbr}</span>
+              <span className="w-[170px] shrink-0 whitespace-nowrap text-slate-400" title={spec.specLabel}>{spec.specLabel}</span>
               <input
                 className="w-12 shrink-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] focus:border-brand-400 focus:outline-none"
                 value={measured[spec.key] ?? ""}
@@ -507,8 +520,13 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
               </span>
             </div>
           );
-        })}
-      </div>
+        };
+        return (
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            {columns.map((col, i) => <div key={i}>{col.map(renderRow)}</div>)}
+          </div>
+        );
+      })()}
       {history.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-2">
           <div className="mb-1 text-[11px] font-semibold text-slate-400">측정 기록</div>
@@ -577,19 +595,25 @@ function fmtWon(n: number) {
 
 // 💰 예상판가 빠른계산 — 쉬퍼 오퍼가를 입력하면 기준정보를 적용해 즉시 예상판가를 계산해서 보여주고,
 // 저장하면 이력으로 쌓인다. 품질규격 비교에서 저장된 AV/IV/S(황) 최신값을 자동으로 불러와 참고로 보여준다.
-function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms, defaultContractPrice }:
-  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string; defaultContractPrice?: number | null }) {
+function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms, defaultContractPrice, qualityDraft }:
+  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string; defaultContractPrice?: number | null; qualityDraft?: Record<string, string> }) {
   const [settings, setSettings] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState<any>({
     shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: defaultIncoterms || "FOB",
-    contract_price: defaultContractPrice ?? "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "", av: "", iv: "", s_value: "",
+    contract_price: defaultContractPrice ?? "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "",
+    av: qualityDraft?.av ?? "", iv: qualityDraft?.iv ?? "", s_value: qualityDraft?.s ?? "",
   });
   // 수출자(Shipper)·Incoterms·계약금액은 이 건의 공급사·거래조건·단가 열과 항상 같은 값을 쓰도록 자동 연동
   useEffect(() => {
     setF((p: any) => ({ ...p, shipper: defaultShipper || "", incoterms: defaultIncoterms || "FOB", contract_price: defaultContractPrice ?? "" }));
   }, [defaultShipper, defaultIncoterms, defaultContractPrice]);
+  // AV/IV/S는 품질규격 비교에서 입력하는 즉시(저장 전이라도) 같은 행이면 바로 따라온다
+  useEffect(() => {
+    if (!qualityDraft) return;
+    setF((p: any) => ({ ...p, av: qualityDraft.av ?? "", iv: qualityDraft.iv ?? "", s_value: qualityDraft.s ?? "" }));
+  }, [qualityDraft]);
 
   function load() {
     api.get("/calc/settings").then((r) => {
@@ -597,17 +621,20 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
       setF((p: any) => ({ ...p, exchange_rate: p.exchange_rate || r.item.exchangeRate }));
     });
     api.get(`/calc/price?entity_type=${entityType}&entity_id=${entityId}`).then((r) => setHistory(r.items || []));
-    api.get(`/calc/quality?entity_type=${entityType}&entity_id=${entityId}`).then((r) => {
-      const latest = r.items?.[0];
-      if (latest) {
-        setF((p: any) => ({
-          ...p,
-          av: p.av || latest.measured.av || "",
-          iv: p.iv || latest.measured.iv || "",
-          s_value: p.s_value || latest.measured.s || "",
-        }));
-      }
-    });
+    // 품질규격 쪽에서 이미 입력(draft) 중인 값이 있으면 그걸 우선하고, 없을 때만 저장된 기록에서 가져온다
+    if (!qualityDraft) {
+      api.get(`/calc/quality?entity_type=${entityType}&entity_id=${entityId}`).then((r) => {
+        const latest = r.items?.[0];
+        if (latest) {
+          setF((p: any) => ({
+            ...p,
+            av: p.av || latest.measured.av || "",
+            iv: p.iv || latest.measured.iv || "",
+            s_value: p.s_value || latest.measured.s || "",
+          }));
+        }
+      });
+    }
   }
   useEffect(load, [entityType, entityId]);
 
@@ -677,7 +704,7 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
           <input type="number" className="input mt-0.5 text-xs" value={f.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
         </label>
         <div className="text-[11px] text-slate-500">
-          스펙 참고 (AV / IV / S)
+          스펙 참고 (AV / IV / S) <span className="text-slate-300">· 품질규격과 연동</span>
           <div className="mt-0.5 flex items-center gap-1">
             <input type="number" title="AV" placeholder="AV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
             <input type="number" title="IV" placeholder="IV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
@@ -776,6 +803,8 @@ export default function TradeModule({ config }: { config: Config }) {
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(new Set());
   // BL번호/메모는 평소엔 숨겨두고, 클릭한 것만 펼쳐서 보여준다 (행 펼침칸이 너무 커지지 않도록)
   const [openSubPanels, setOpenSubPanels] = useState<Set<string>>(new Set());
+  // 품질규격에서 입력 중인 AV/IV/S 값을 저장 전에도 원가계산 쪽에 바로 반영하기 위한 건별 임시 저장소
+  const [qualityDraft, setQualityDraft] = useState<Record<number, Record<string, string>>>({});
   function toggleSubPanel(key: string) {
     setOpenSubPanels((prev) => {
       const next = new Set(prev);
@@ -1048,10 +1077,16 @@ export default function TradeModule({ config }: { config: Config }) {
                               <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                             )}
                             {openSubPanels.has(`quality_${r.id}`) && (
-                              <div className="mt-3"><QualityPanel entityType={config.entityType} entityId={r.id} /></div>
+                              <div className="mt-3">
+                                <QualityPanel entityType={config.entityType} entityId={r.id} draft={qualityDraft[r.id]}
+                                  onDraftChange={(m) => setQualityDraft((p) => ({ ...p, [r.id]: m }))} />
+                              </div>
                             )}
                             {openSubPanels.has(`price_${r.id}`) && (
-                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} /></div>
+                              <div className="mt-3">
+                                <PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
+                                  defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft[r.id]} />
+                              </div>
                             )}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
