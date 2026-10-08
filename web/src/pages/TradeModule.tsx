@@ -964,6 +964,26 @@ export default function TradeModule({ config }: { config: Config }) {
     }
   }
 
+  // ETD(출항일)가 오늘이거나 지났는데 아직 "계약" 단계면 이미 선적된 것으로 보고 자동으로 "선적" 단계로 넘긴다
+  const autoAdvancedRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!items || items.length === 0) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (const r of items) {
+      if (r.status === "contracted" && r.etd && !autoAdvancedRef.current.has(r.id)) {
+        const etdDate = new Date(r.etd);
+        if (!Number.isNaN(etdDate.getTime())) {
+          etdDate.setHours(0, 0, 0, 0);
+          if (etdDate <= today) {
+            autoAdvancedRef.current.add(r.id);
+            setStage(r, "shipped");
+          }
+        }
+      }
+    }
+  }, [items]);
+
   const [backingUp, setBackingUp] = useState(false);
   async function backfillBackup() {
     if (!confirm(`지금까지 올라온 첨부파일을 전부 파일함(자동 백업 → ${config.title} → 거래처명 → 계약별 폴더)에 백업/정리할까요?\n이미 올바른 위치에 백업된 파일은 건너뜁니다.`)) return;
