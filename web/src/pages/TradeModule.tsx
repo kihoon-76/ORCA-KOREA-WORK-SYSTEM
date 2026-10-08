@@ -439,20 +439,42 @@ function computePrice(settings: any, f: any) {
   const qty = f.quantity !== "" && f.quantity != null ? Number(f.quantity) : null;
   const totalBuyAmount = qty != null ? qty * buyingPrice : null;
   const totalSellAmount = qty != null ? qty * 1000 * expectedPrice : null;
-  return { buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount };
+  return {
+    buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount,
+    // 총원가가 나오기까지의 비용 구성 (항만비~2차운송)
+    breakdown: {
+      customs: settings.logistics.customs,
+      cntr: settings.logistics.cntr,
+      melting: settings.logistics.melting,
+      transport1: settings.logistics.transport1,
+      procCost: proc.cost,
+      lossRate: proc.loss,
+      lossCost,
+      transport2: settings.logistics.transport2,
+    },
+  };
+}
+
+// ₩ 표시용 — 정수면 그대로, 소수면 소수점 첫째자리까지
+function fmtWon(n: number) {
+  return Math.abs(n - Math.round(n)) < 0.01 ? Math.round(n).toLocaleString() : n.toFixed(1);
 }
 
 // 💰 예상판가 빠른계산 — 쉬퍼 오퍼가를 입력하면 기준정보를 적용해 즉시 예상판가를 계산해서 보여주고,
 // 저장하면 이력으로 쌓인다. 품질규격 비교에서 저장된 AV/IV/S(황) 최신값을 자동으로 불러와 참고로 보여준다.
-function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity }:
-  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null }) {
+function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms }:
+  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string }) {
   const [settings, setSettings] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState<any>({
-    shipper: "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: "FOB",
+    shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: defaultIncoterms || "FOB",
     contract_price: "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "", av: "", iv: "", s_value: "",
   });
+  // 수출자(Shipper)·Incoterms는 이 건의 공급사·거래조건 열과 항상 같은 값을 쓰도록 자동 연동
+  useEffect(() => {
+    setF((p: any) => ({ ...p, shipper: defaultShipper || "", incoterms: defaultIncoterms || "FOB" }));
+  }, [defaultShipper, defaultIncoterms]);
 
   function load() {
     api.get("/calc/settings").then((r) => {
@@ -476,11 +498,13 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity 
 
   function set(k: string, v: any) { setF((p: any) => ({ ...p, [k]: v })); }
   function loadFrom(h: any) {
-    setF({
-      shipper: h.shipper || "", product: h.product || "", quantity: h.quantity ?? "", incoterms: h.incoterms || "FOB",
+    // 수출자·Incoterms는 항상 현재 공급사/거래조건 열 값을 따르므로 과거 기록 값으로 덮어쓰지 않는다
+    setF((p: any) => ({
+      ...p,
+      product: h.product || "", quantity: h.quantity ?? "",
       contract_price: h.contract_price ?? "", freight: h.freight ?? "", lc_type: h.lc_type || LC_TYPES[0], proc_type: h.proc_type || PROC_TYPES[0],
       exchange_rate: h.exchange_rate ?? "", av: h.av ?? "", iv: h.iv ?? "", s_value: h.s_value ?? "",
-    });
+    }));
   }
 
   const preview = computePrice(settings, f);
@@ -508,20 +532,17 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity 
         <div className="text-xs font-semibold text-slate-600">💰 예상판가 빠른계산</div>
         <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "계산 저장"}</button>
       </div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
+        <span>수출자(Shipper) <span className="font-semibold text-slate-700">{f.shipper || "-"}</span></span>
+        <span>Incoterms <span className="font-semibold text-slate-700">{f.incoterms || "-"}</span></span>
+        <span className="text-slate-400">— 위 공급사 · 거래조건 열과 자동 연동됩니다 (바꾸려면 행에서 직접 수정)</span>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <label className="text-[11px] text-slate-500">수출자(Shipper)
-          <input className="input mt-0.5 text-xs" value={f.shipper} onChange={(e) => set("shipper", e.target.value)} />
-        </label>
         <label className="text-[11px] text-slate-500">품목명
           <input className="input mt-0.5 text-xs" value={f.product} onChange={(e) => set("product", e.target.value)} />
         </label>
         <label className="text-[11px] text-slate-500">수량 (MT)
           <input type="number" className="input mt-0.5 text-xs" value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
-        </label>
-        <label className="text-[11px] text-slate-500">Incoterms
-          <select className="input mt-0.5 text-xs" value={f.incoterms} onChange={(e) => set("incoterms", e.target.value)}>
-            <option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option>
-          </select>
         </label>
         <label className="text-[11px] text-slate-500">계약금액 ($/MT)
           <input type="number" className="input mt-0.5 text-xs" value={f.contract_price} onChange={(e) => set("contract_price", e.target.value)} />
@@ -564,6 +585,31 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity 
           {preview.totalSellAmount != null && (
             <div className="text-slate-500 sm:col-span-4">총구매금액 ${preview.totalBuyAmount?.toLocaleString()} · 총예상판매금액 ₩{preview.totalSellAmount?.toLocaleString()}</div>
           )}
+        </div>
+      )}
+
+      {preview && (
+        <div className="mt-2 rounded border border-slate-100 p-2">
+          <div className="mb-1 text-[11px] font-semibold text-slate-400">원가 구성 (물대 → 총원가)</div>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600">
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">물대 ₩{preview.muldePrice.toLocaleString()}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">항만비 ₩{fmtWon(preview.breakdown.customs)}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">컨테이너운송료 ₩{fmtWon(preview.breakdown.cntr)}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">멜팅비 ₩{fmtWon(preview.breakdown.melting)}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">1차운송 ₩{fmtWon(preview.breakdown.transport1)}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">가공비({f.proc_type}) ₩{fmtWon(preview.breakdown.procCost)}</span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">로스비용 ₩{fmtWon(preview.breakdown.lossCost)} <span className="text-slate-400">(로스율 {(preview.breakdown.lossRate * 100).toFixed(1)}%)</span></span>
+            <span className="text-slate-300">+</span>
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">2차운송 ₩{fmtWon(preview.breakdown.transport2)}</span>
+            <span className="text-slate-300">=</span>
+            <span className="rounded bg-brand-50 px-1.5 py-0.5 font-bold text-brand-700">총원가 ₩{preview.totalCost.toLocaleString()}/kg</span>
+          </div>
         </div>
       )}
 
@@ -893,7 +939,7 @@ export default function TradeModule({ config }: { config: Config }) {
                               <div className="mt-3"><QualityPanel entityType={config.entityType} entityId={r.id} /></div>
                             )}
                             {openSubPanels.has(`price_${r.id}`) && (
-                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} /></div>
+                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} /></div>
                             )}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
