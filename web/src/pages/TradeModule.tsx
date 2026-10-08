@@ -845,6 +845,16 @@ export default function TradeModule({ config }: { config: Config }) {
       return next;
     });
   }
+  // 품질규격/원가계산 패널은 둘 다 펼쳐지면 길어져서, 새로 연 패널이 화면에 바로 보이도록 스크롤까지 같이 해준다
+  function toggleSubPanelAndScroll(key: string) {
+    const willOpen = !openSubPanels.has(key);
+    toggleSubPanel(key);
+    if (willOpen) {
+      setTimeout(() => {
+        document.getElementById(`subpanel_${key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 80);
+    }
+  }
 
   const lcLabel = config.lcLabel || "LC개설";
   const partnerFilterCols = [
@@ -1092,12 +1102,12 @@ export default function TradeModule({ config }: { config: Config }) {
                                 <>
                                   <button type="button"
                                     className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`quality_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
-                                    onClick={() => toggleSubPanel(`quality_${r.id}`)}>
+                                    onClick={() => toggleSubPanelAndScroll(`quality_${r.id}`)}>
                                     🧪 품질규격
                                   </button>
                                   <button type="button"
                                     className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`price_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
-                                    onClick={() => toggleSubPanel(`price_${r.id}`)}>
+                                    onClick={() => toggleSubPanelAndScroll(`price_${r.id}`)}>
                                     💰 원가계산
                                   </button>
                                 </>
@@ -1110,13 +1120,13 @@ export default function TradeModule({ config }: { config: Config }) {
                               <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                             )}
                             {openSubPanels.has(`quality_${r.id}`) && (
-                              <div className="mt-3">
+                              <div className="mt-3 scroll-mt-20" id={`subpanel_quality_${r.id}`}>
                                 <QualityPanel entityType={config.entityType} entityId={r.id} draft={qualityDraft[r.id]}
                                   onDraftChange={(m) => setQualityDraft((p) => ({ ...p, [r.id]: m }))} />
                               </div>
                             )}
                             {openSubPanels.has(`price_${r.id}`) && (
-                              <div className="mt-3">
+                              <div className="mt-3 scroll-mt-20" id={`subpanel_price_${r.id}`}>
                                 <PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
                                   defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft[r.id]} />
                               </div>
