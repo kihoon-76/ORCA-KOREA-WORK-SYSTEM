@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, getToken } from "../api";
 import { PageHeader, Spinner, Empty, Modal, Field, useList } from "../components/ui";
 import { SPEC_ITEMS, judgeItem, judgeSiAlFeGroup, recommendedAction, summarize } from "../qualitySpec";
 
@@ -299,6 +299,132 @@ function InlineField({ icon, label, value, placeholder, onCommit }:
 
 // 🧪 품질규격 비교 — 측정값을 입력하면 [기력용 바이오중유 품질규격] 기준과 즉시 비교해서 보여주고,
 // 저장하면 이력으로 쌓인다(과거 기록 불러오기/삭제 가능).
+// 📷 COA(분석성적서) 이미지 — 품질규격 비교에서 바로 업로드하고, 썸네일을 클릭하면 새 탭에서 원본 크기로 미리볼 수 있다.
+function CoaPanel({ entityType, entityId }: { entityType: string; entityId: number }) {
+  const [files, setFiles] = useState<any[]>([]);
+  const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  function load() {
+    api.get(`/files/list?entity_type=${entityType}&entity_id=${entityId}&category=coa`).then((r) => setFiles(r.items || []));
+  }
+  useEffect(load, [entityType, entityId]);
+
+  // 이미지 파일은 미리 내려받아 썸네일로 보여준다 (다운로드는 토큰 인증이 필요해서 img src에 바로 못 씀)
+  useEffect(() => {
+    const createdUrls: string[] = [];
+    let cancelled = false;
+    (async () => {
+      for (const f of files) {
+        if (!f.content_type?.startsWith("image/") || thumbs[f.id]) continue;
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/files/download/${f.id}?inline=1`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (!res.ok || cancelled) continue;
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          createdUrls.push(url);
+          if (!cancelled) setThumbs((p) => ({ ...p, [f.id]: url }));
+        } catch {
+          // 썸네일 실패는 무시 — 파일명으로라도 보여주고 미리보기 버튼은 그대로 동작
+        }
+      }
+    })();
+    return () => { cancelled = true; createdUrls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [files]);
+
+  async function uploadFiles(list: FileList | File[]) {
+    const arr = Array.from(list);
+    if (arr.length === 0) return;
+    setBusy(true);
+    try {
+      for (const file of arr) await api.upload(file, entityType, entityId, "coa");
+      load();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = e.target.files;
+    if (list && list.length) await uploadFiles(list);
+    e.target.value = "";
+  }
+  function onDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) { dragCounter.current++; setDragOver(true); }
+  }
+  function onDragOver(e: React.DragEvent) { e.preventDefault(); }
+  function onDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setDragOver(false);
+  }
+  async function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragOver(false);
+    if (e.dataTransfer.files?.length) await uploadFiles(e.dataTransfer.files);
+  }
+  async function remove(id: number) {
+    if (!confirm("이 COA 이미지를 삭제하시겠습니까?")) return;
+    await api.del(`/files/${id}`);
+    load();
+  }
+
+  return (
+    <div
+      className={`mb-3 rounded-lg border p-3 transition-colors ${dragOver ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-white"}`}
+      onClick={(e) => e.stopPropagation()} onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-slate-600">📷 COA 분석표 이미지</div>
+        <label className="btn-secondary cursor-pointer whitespace-nowrap px-2 py-1 text-xs">
+          {busy ? "업로드중..." : "+ 이미지 추가"}
+          <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={onFileInput} disabled={busy} />
+        </label>
+      </div>
+      {dragOver ? (
+        <p className="pointer-events-none rounded border-2 border-dashed border-brand-400 py-4 text-center text-xs font-semibold text-brand-600">
+          여기에 이미지를 놓으면 업로드됩니다
+        </p>
+      ) : files.length === 0 ? (
+        <p className="text-xs text-slate-400">업로드된 COA 이미지가 없습니다. 분석일지·성적서 사진을 끌어다 놓거나 "+ 이미지 추가"로 올려보세요.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <div key={f.id} className="group relative h-20 w-20 shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                className="block h-full w-full"
+                title={`${f.file_name} (클릭하면 크게 보기)`}
+                onClick={() => api.preview(f.id)}
+              >
+                {thumbs[f.id] ? (
+                  <img src={thumbs[f.id]} alt={f.file_name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center p-1 text-center text-[10px] text-slate-400">{f.file_name}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="absolute right-0.5 top-0.5 hidden h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-red-600 group-hover:flex"
+                title="삭제"
+                onClick={() => remove(f.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QualityPanel({ entityType, entityId }: { entityType: string; entityId: number }) {
   const [history, setHistory] = useState<any[]>([]);
   const [measured, setMeasured] = useState<Record<string, string>>({});
@@ -360,6 +486,7 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
           <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "저장"}</button>
         </div>
       </div>
+      <CoaPanel entityType={entityType} entityId={entityId} />
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
         {SPEC_ITEMS.map((spec) => {
           const isSiAlFe = spec.group === "si_al_fe";
