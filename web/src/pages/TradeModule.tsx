@@ -577,13 +577,15 @@ function computePrice(settings: any, f: any) {
   const transport2 = f.transport2 !== "" && f.transport2 != null ? Number(f.transport2) : settings.logistics.transport2;
   const lossCost = muldePrice * proc.loss;
   const totalCost = muldePrice + customs + cntr + melting + transport1 + proc.cost + lossCost + transport2;
-  const margin = Math.ceil(totalCost * settings.salesMarginRate);
+  // 마진율은 기준정보 기본값을 쓰되, 예상판가를 가늠해보고 싶을 때 건별로 조절할 수 있다 (%)
+  const marginRatePct = f.margin_rate !== "" && f.margin_rate != null ? Number(f.margin_rate) / 100 : settings.salesMarginRate;
+  const margin = Math.ceil(totalCost * marginRatePct);
   const expectedPrice = totalCost + margin;
   const qty = f.quantity !== "" && f.quantity != null ? Number(f.quantity) : null;
   const totalBuyAmount = qty != null ? qty * buyingPrice : null;
   const totalSellAmount = qty != null ? qty * 1000 * expectedPrice : null;
   return {
-    buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount,
+    buyingPrice, orcaPrice, muldePrice, totalCost, margin, marginRatePct, expectedPrice, totalBuyAmount, totalSellAmount,
     // 총원가가 나오기까지의 비용 구성 (항만비~2차운송)
     breakdown: { customs, cntr, melting, transport1, procCost: proc.cost, lossRate: proc.loss, lossCost, transport2 },
   };
@@ -604,7 +606,7 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
   const [f, setF] = useState<any>({
     shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: defaultIncoterms || "FOB",
     contract_price: defaultContractPrice ?? "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "",
-    customs: "", cntr: "", melting: "", transport1: "", transport2: "",
+    customs: "", cntr: "", melting: "", transport1: "", transport2: "", margin_rate: "",
     av: qualityDraft?.av ?? "", iv: qualityDraft?.iv ?? "", s_value: qualityDraft?.s ?? "",
   });
   // 수출자(Shipper)·품목명·수량·Incoterms·계약금액은 이 건의 행 데이터와 항상 같은 값을 쓰도록 자동 연동 (여기선 따로 입력 안 함)
@@ -632,6 +634,7 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
         melting: p.melting !== "" ? p.melting : r.item.logistics.melting,
         transport1: p.transport1 !== "" ? p.transport1 : r.item.logistics.transport1,
         transport2: p.transport2 !== "" ? p.transport2 : r.item.logistics.transport2,
+        margin_rate: p.margin_rate !== "" ? p.margin_rate : Number((r.item.salesMarginRate * 100).toFixed(2)),
       }));
     });
     api.get(`/calc/price?entity_type=${entityType}&entity_id=${entityId}`).then((r) => setHistory(r.items || []));
@@ -661,6 +664,7 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
       exchange_rate: h.exchange_rate ?? "", av: h.av ?? "", iv: h.iv ?? "", s_value: h.s_value ?? "",
       customs: h.customs ?? p.customs, cntr: h.cntr ?? p.cntr, melting: h.melting ?? p.melting,
       transport1: h.transport1 ?? p.transport1, transport2: h.transport2 ?? p.transport2,
+      margin_rate: h.margin_rate != null ? Number((h.margin_rate * 100).toFixed(2)) : p.margin_rate,
     }));
   }
 
@@ -728,15 +732,20 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
       </div>
 
       {preview && (
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded bg-slate-50 p-2 text-xs sm:grid-cols-4">
-          <div><span className="text-slate-400">Buying Price</span><div className="font-bold">${preview.buyingPrice.toLocaleString()}/MT</div></div>
-          <div><span className="text-slate-400">Orca Price</span><div className="font-bold">${preview.orcaPrice.toFixed(2)}/MT</div></div>
-          <div><span className="text-slate-400">물대</span><div className="font-bold">₩{preview.muldePrice.toLocaleString()}/kg</div></div>
-          <div><span className="text-slate-400">총원가</span><div className="font-bold">₩{preview.totalCost.toLocaleString()}/kg</div></div>
-          <div><span className="text-slate-400">마진</span><div className="font-bold">₩{preview.margin.toLocaleString()}/kg</div></div>
-          <div className="sm:col-span-2"><span className="text-slate-400">예상판가</span><div className="text-base font-extrabold text-brand-700">₩{preview.expectedPrice.toLocaleString()}/kg</div></div>
+        <div className="mt-3 rounded bg-slate-50 p-2 text-xs">
+          <div className="flex flex-wrap items-start gap-x-4 gap-y-1.5">
+            <div><span className="text-slate-400">Buying Price</span><div className="font-bold">${preview.buyingPrice.toLocaleString()}/MT</div></div>
+            <div><span className="text-slate-400">Orca Price</span><div className="font-bold">${preview.orcaPrice.toFixed(2)}/MT</div></div>
+            <div><span className="text-slate-400">물대</span><div className="font-bold">₩{preview.muldePrice.toLocaleString()}/kg</div></div>
+            <div><span className="text-slate-400">총원가</span><div className="text-base font-extrabold text-brand-700">₩{preview.totalCost.toLocaleString()}/kg</div></div>
+            <div>
+              <span className="text-slate-400">마진 (<input type="number" step="0.1" className="w-10 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-center focus:border-brand-400 focus:outline-none" value={f.margin_rate} onChange={(e) => set("margin_rate", e.target.value)} />%)</span>
+              <div className="font-bold">₩{preview.margin.toLocaleString()}/kg</div>
+            </div>
+            <div><span className="text-slate-400">예상판가</span><div className="font-bold">₩{preview.expectedPrice.toLocaleString()}/kg</div></div>
+          </div>
           {preview.totalSellAmount != null && (
-            <div className="text-slate-500 sm:col-span-4">총구매금액 ${preview.totalBuyAmount?.toLocaleString()} · 총예상판매금액 ₩{preview.totalSellAmount?.toLocaleString()}</div>
+            <div className="mt-1.5 text-slate-500">총구매금액 ${preview.totalBuyAmount?.toLocaleString()} · 총예상판매금액 ₩{preview.totalSellAmount?.toLocaleString()}</div>
           )}
         </div>
       )}

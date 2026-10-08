@@ -95,7 +95,7 @@ app.post("/price", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const {
     entity_type, entity_id, shipper, product, quantity, incoterms, contract_price, freight, lc_type, proc_type, exchange_rate, av, iv, s_value,
-    customs, cntr, melting, transport1, transport2, note,
+    customs, cntr, melting, transport1, transport2, margin_rate, note,
   } = body;
   if (!entity_type || !entity_id) return c.json({ error: "entity 정보가 필요합니다" }, 400);
 
@@ -116,7 +116,9 @@ app.post("/price", async (c) => {
   const muldePrice = roundUp((rate * orcaPrice) / 1000);
   const lossCost = muldePrice * proc.loss;
   const totalCost = muldePrice + customsV + cntrV + meltingV + transport1V + proc.cost + lossCost + transport2V;
-  const margin = roundUp(totalCost * settings.salesMarginRate);
+  // 마진율은 기준정보 기본값을 건별로 덮어쓸 수 있다 (margin_rate는 %값, 예: 5 => 0.05)
+  const marginRateV = margin_rate != null && margin_rate !== "" ? Number(margin_rate) / 100 : settings.salesMarginRate;
+  const margin = roundUp(totalCost * marginRateV);
   const expectedPrice = totalCost + margin;
   const qty = quantity != null && quantity !== "" ? Number(quantity) : null;
   const totalBuyAmount = qty != null ? qty * buyingPrice : null;
@@ -124,15 +126,15 @@ app.post("/price", async (c) => {
 
   const res = await c.env.DB.prepare(
     `INSERT INTO price_calcs (entity_type, entity_id, shipper, product, quantity, incoterms, contract_price, freight, lc_type, proc_type,
-      exchange_rate, av, iv, s_value, customs, cntr, melting, transport1, transport2,
+      exchange_rate, av, iv, s_value, customs, cntr, melting, transport1, transport2, margin_rate,
       buying_price, orca_price, mulde_price, total_cost, margin, expected_price, total_buy_amount, total_sell_amount, note, created_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     entity_type, entity_id, shipper || null, product || null, qty, incoterms || null,
     contract_price != null ? Number(contract_price) : null, freight != null ? Number(freight) : null,
     lc_type || null, proc_type || null, rate,
     av != null && av !== "" ? Number(av) : null, iv != null && iv !== "" ? Number(iv) : null, s_value != null && s_value !== "" ? Number(s_value) : null,
-    customsV, cntrV, meltingV, transport1V, transport2V,
+    customsV, cntrV, meltingV, transport1V, transport2V, marginRateV,
     buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount, note || null, c.get("user").uid
   ).run();
   const row = await c.env.DB.prepare("SELECT * FROM price_calcs WHERE id = ?").bind(res.meta.last_row_id).first();
