@@ -493,17 +493,16 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
           const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
           const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
           return (
-            <div key={spec.key} className="flex items-center gap-1.5 border-b border-slate-50 py-1 text-[11px]">
-              <div className="min-w-0 flex-1 truncate text-slate-600" title={`${spec.item} (${spec.abbr}) · ${spec.specLabel}`}>
-                <span className="font-semibold">{spec.abbr}</span> <span className="text-slate-400">{spec.specLabel}</span>
-              </div>
+            <div key={spec.key} className="flex items-center gap-1 border-b border-slate-50 py-1 text-[11px]">
+              <span className="w-[76px] shrink-0 truncate font-semibold text-slate-700" title={spec.item}>{spec.abbr}</span>
+              <span className="w-[96px] shrink-0 truncate text-slate-400" title={spec.specLabel}>{spec.specLabel}</span>
               <input
-                className="w-14 shrink-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] focus:border-brand-400 focus:outline-none"
+                className="w-12 shrink-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] focus:border-brand-400 focus:outline-none"
                 value={measured[spec.key] ?? ""}
                 placeholder={spec.criterion === "등급" ? "1b" : ""}
                 onChange={(e) => setVal(spec.key, e.target.value)}
               />
-              <span className={`w-9 shrink-0 text-right font-semibold ${verdict === "부적합" ? "text-red-600" : verdict === "적합" ? "text-green-600" : "text-slate-300"}`} title={action || undefined}>
+              <span className={`w-8 shrink-0 text-right font-semibold ${verdict === "부적합" ? "text-red-600" : verdict === "적합" ? "text-green-600" : "text-slate-300"}`} title={action || undefined}>
                 {verdict || "-"}
               </span>
             </div>
