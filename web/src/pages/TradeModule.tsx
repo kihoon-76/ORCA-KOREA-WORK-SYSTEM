@@ -360,39 +360,28 @@ function QualityPanel({ entityType, entityId }: { entityType: string; entityId: 
           <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "저장"}</button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[480px] text-xs">
-          <thead>
-            <tr className="text-left text-slate-400">
-              <th className="py-1 pr-2">항목</th><th className="py-1 pr-2">품질규격</th><th className="w-20 py-1 pr-2">측정값</th><th className="py-1 pr-2">판정</th><th className="py-1">권장 처리</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SPEC_ITEMS.map((spec) => {
-              const isSiAlFe = spec.group === "si_al_fe";
-              const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
-              const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
-              return (
-                <tr key={spec.key} className="border-t border-slate-100">
-                  <td className="py-1 pr-2">{spec.item}<div className="text-[10px] text-slate-400">{spec.abbr}</div></td>
-                  <td className="py-1 pr-2 text-slate-500">{spec.specLabel}</td>
-                  <td className="py-1 pr-2">
-                    <input
-                      className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs focus:border-brand-400 focus:outline-none"
-                      value={measured[spec.key] ?? ""}
-                      placeholder={spec.criterion === "등급" ? "예: 1b" : ""}
-                      onChange={(e) => setVal(spec.key, e.target.value)}
-                    />
-                  </td>
-                  <td className="py-1 pr-2">
-                    {verdict && <span className={`font-semibold ${verdict === "부적합" ? "text-red-600" : verdict === "적합" ? "text-green-600" : "text-slate-400"}`}>{verdict}</span>}
-                  </td>
-                  <td className="py-1 text-slate-500">{action}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+        {SPEC_ITEMS.map((spec) => {
+          const isSiAlFe = spec.group === "si_al_fe";
+          const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
+          const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
+          return (
+            <div key={spec.key} className="flex items-center gap-1.5 border-b border-slate-50 py-1 text-[11px]">
+              <div className="min-w-0 flex-1 truncate text-slate-600" title={`${spec.item} (${spec.abbr}) · ${spec.specLabel}`}>
+                <span className="font-semibold">{spec.abbr}</span> <span className="text-slate-400">{spec.specLabel}</span>
+              </div>
+              <input
+                className="w-14 shrink-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] focus:border-brand-400 focus:outline-none"
+                value={measured[spec.key] ?? ""}
+                placeholder={spec.criterion === "등급" ? "1b" : ""}
+                onChange={(e) => setVal(spec.key, e.target.value)}
+              />
+              <span className={`w-9 shrink-0 text-right font-semibold ${verdict === "부적합" ? "text-red-600" : verdict === "적합" ? "text-green-600" : "text-slate-300"}`} title={action || undefined}>
+                {verdict || "-"}
+              </span>
+            </div>
+          );
+        })}
       </div>
       {history.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-2">

@@ -42,9 +42,6 @@ export const SPEC_ITEMS: SpecItem[] = [
   { key: "fe", item: "철(mg/kg)", abbr: "Fe", specLabel: "Si+Al+Fe 합계 200 이하", high: 200, criterion: "참고", method: "ASTM D7111", group: "si_al_fe" },
   { key: "p", item: "인(mg/kg)", abbr: "P", specLabel: "20 이하", high: 20, criterion: "이하", method: "ASTM D7111", recommend: "탈검" },
   { key: "hg", item: "수은(mg/kg)", abbr: "Hg", specLabel: "20 이하", high: 20, criterion: "이하", method: "UOP 938", recommend: "특수처리" },
-  { key: "c", item: "원소분석(무게%)", abbr: "C", specLabel: "-", criterion: "참고", method: "ASTM D5291" },
-  { key: "h", item: "원소분석(무게%)", abbr: "H", specLabel: "-", criterion: "참고", method: "ASTM D5291" },
-  { key: "o", item: "원소분석(무게%)", abbr: "O", specLabel: "-", criterion: "참고", method: "Element Analyzer" },
 ];
 
 export type Verdict = "적합" | "부적합" | "참고용" | "";
