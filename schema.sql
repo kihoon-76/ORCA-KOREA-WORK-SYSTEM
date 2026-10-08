@@ -324,6 +324,11 @@ CREATE TABLE IF NOT EXISTS price_calcs (
   av                  REAL,
   iv                  REAL,
   s_value             REAL,
+  customs             REAL,   -- 항만비 (₩/kg) — 건별로 기준정보 기본값을 덮어쓸 수 있음
+  cntr                REAL,   -- 컨테이너운송료 (₩/kg)
+  melting             REAL,   -- 멜팅비 (₩/kg)
+  transport1          REAL,   -- 1차운송 (₩/kg)
+  transport2          REAL,   -- 2차운송 (₩/kg)
   buying_price        REAL,   -- Buying Price ($/MT)
   orca_price          REAL,   -- Orca Price ($/MT)
   mulde_price         REAL,   -- 물대Price (₩/kg)

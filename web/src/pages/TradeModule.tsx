@@ -564,9 +564,14 @@ function computePrice(settings: any, f: any) {
   const buyingPrice = f.incoterms === "FOB" ? contractPrice + freight : contractPrice;
   const orcaPrice = buyingPrice * (1 + marginRate);
   const muldePrice = Math.ceil((rate * orcaPrice) / 1000);
+  // 항만비·컨테이너운송료·멜팅비·1차/2차운송은 기준정보 기본값을 건별로 덮어쓸 수 있다 (비어있으면 기본값 사용)
+  const customs = f.customs !== "" && f.customs != null ? Number(f.customs) : settings.logistics.customs;
+  const cntr = f.cntr !== "" && f.cntr != null ? Number(f.cntr) : settings.logistics.cntr;
+  const melting = f.melting !== "" && f.melting != null ? Number(f.melting) : settings.logistics.melting;
+  const transport1 = f.transport1 !== "" && f.transport1 != null ? Number(f.transport1) : settings.logistics.transport1;
+  const transport2 = f.transport2 !== "" && f.transport2 != null ? Number(f.transport2) : settings.logistics.transport2;
   const lossCost = muldePrice * proc.loss;
-  const totalCost = muldePrice + settings.logistics.customs + settings.logistics.cntr + settings.logistics.melting
-    + settings.logistics.transport1 + proc.cost + lossCost + settings.logistics.transport2;
+  const totalCost = muldePrice + customs + cntr + melting + transport1 + proc.cost + lossCost + transport2;
   const margin = Math.ceil(totalCost * settings.salesMarginRate);
   const expectedPrice = totalCost + margin;
   const qty = f.quantity !== "" && f.quantity != null ? Number(f.quantity) : null;
@@ -575,16 +580,7 @@ function computePrice(settings: any, f: any) {
   return {
     buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount,
     // 총원가가 나오기까지의 비용 구성 (항만비~2차운송)
-    breakdown: {
-      customs: settings.logistics.customs,
-      cntr: settings.logistics.cntr,
-      melting: settings.logistics.melting,
-      transport1: settings.logistics.transport1,
-      procCost: proc.cost,
-      lossRate: proc.loss,
-      lossCost,
-      transport2: settings.logistics.transport2,
-    },
+    breakdown: { customs, cntr, melting, transport1, procCost: proc.cost, lossRate: proc.loss, lossCost, transport2 },
   };
 }
 
@@ -603,12 +599,17 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
   const [f, setF] = useState<any>({
     shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: defaultIncoterms || "FOB",
     contract_price: defaultContractPrice ?? "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "",
+    customs: "", cntr: "", melting: "", transport1: "", transport2: "",
     av: qualityDraft?.av ?? "", iv: qualityDraft?.iv ?? "", s_value: qualityDraft?.s ?? "",
   });
-  // 수출자(Shipper)·Incoterms·계약금액은 이 건의 공급사·거래조건·단가 열과 항상 같은 값을 쓰도록 자동 연동
+  // 수출자(Shipper)·품목명·수량·Incoterms·계약금액은 이 건의 행 데이터와 항상 같은 값을 쓰도록 자동 연동 (여기선 따로 입력 안 함)
   useEffect(() => {
-    setF((p: any) => ({ ...p, shipper: defaultShipper || "", incoterms: defaultIncoterms || "FOB", contract_price: defaultContractPrice ?? "" }));
-  }, [defaultShipper, defaultIncoterms, defaultContractPrice]);
+    setF((p: any) => ({
+      ...p,
+      shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "",
+      incoterms: defaultIncoterms || "FOB", contract_price: defaultContractPrice ?? "",
+    }));
+  }, [defaultShipper, defaultProduct, defaultQuantity, defaultIncoterms, defaultContractPrice]);
   // AV/IV/S는 품질규격 비교에서 입력하는 즉시(저장 전이라도) 같은 행이면 바로 따라온다
   useEffect(() => {
     if (!qualityDraft) return;
@@ -618,7 +619,15 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
   function load() {
     api.get("/calc/settings").then((r) => {
       setSettings(r.item);
-      setF((p: any) => ({ ...p, exchange_rate: p.exchange_rate || r.item.exchangeRate }));
+      setF((p: any) => ({
+        ...p,
+        exchange_rate: p.exchange_rate || r.item.exchangeRate,
+        customs: p.customs !== "" ? p.customs : r.item.logistics.customs,
+        cntr: p.cntr !== "" ? p.cntr : r.item.logistics.cntr,
+        melting: p.melting !== "" ? p.melting : r.item.logistics.melting,
+        transport1: p.transport1 !== "" ? p.transport1 : r.item.logistics.transport1,
+        transport2: p.transport2 !== "" ? p.transport2 : r.item.logistics.transport2,
+      }));
     });
     api.get(`/calc/price?entity_type=${entityType}&entity_id=${entityId}`).then((r) => setHistory(r.items || []));
     // 품질규격 쪽에서 이미 입력(draft) 중인 값이 있으면 그걸 우선하고, 없을 때만 저장된 기록에서 가져온다
@@ -640,12 +649,13 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
 
   function set(k: string, v: any) { setF((p: any) => ({ ...p, [k]: v })); }
   function loadFrom(h: any) {
-    // 수출자·Incoterms·계약금액은 항상 현재 공급사/거래조건/단가 열 값을 따르므로 과거 기록 값으로 덮어쓰지 않는다
+    // 수출자·품목명·수량·Incoterms·계약금액은 항상 현재 행 값을 따르므로 과거 기록 값으로 덮어쓰지 않는다
     setF((p: any) => ({
       ...p,
-      product: h.product || "", quantity: h.quantity ?? "",
       freight: h.freight ?? "", lc_type: h.lc_type || LC_TYPES[0], proc_type: h.proc_type || PROC_TYPES[0],
       exchange_rate: h.exchange_rate ?? "", av: h.av ?? "", iv: h.iv ?? "", s_value: h.s_value ?? "",
+      customs: h.customs ?? p.customs, cntr: h.cntr ?? p.cntr, melting: h.melting ?? p.melting,
+      transport1: h.transport1 ?? p.transport1, transport2: h.transport2 ?? p.transport2,
     }));
   }
 
@@ -676,39 +686,38 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
         <span>수출자(Shipper) <span className="font-semibold text-slate-700">{f.shipper || "-"}</span></span>
-        <span>Incoterms <span className="font-semibold text-slate-700">{f.incoterms || "-"}</span></span>
-        <span>계약금액 <span className="font-semibold text-slate-700">{f.contract_price !== "" ? `$${Number(f.contract_price).toLocaleString()}/MT` : "-"}</span></span>
-        <span className="text-slate-400">— 위 공급사 · 거래조건 · 단가 열과 자동 연동됩니다 (바꾸려면 행에서 직접 수정)</span>
+        <span>품목 <span className="font-semibold text-slate-700">{f.product || "-"}{f.quantity !== "" ? ` · ${Number(f.quantity).toLocaleString()}MT` : ""}</span></span>
+        <span className="text-slate-400">— 위 원료명 · 공급사 · 물량 열과 자동 연동됩니다 (바꾸려면 행에서 직접 수정)</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <label className="text-[11px] text-slate-500">품목명
-          <input className="input mt-0.5 text-xs" value={f.product} onChange={(e) => set("product", e.target.value)} />
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="w-20 shrink-0 text-[11px] text-slate-500">Incoterms
+          <div className="input mt-0.5 cursor-default bg-slate-50 text-xs text-slate-600">{f.incoterms || "-"}</div>
         </label>
-        <label className="text-[11px] text-slate-500">수량 (MT)
-          <input type="number" className="input mt-0.5 text-xs" value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
+        <label className="w-24 shrink-0 text-[11px] text-slate-500">계약금액 ($/MT)
+          <div className="input mt-0.5 cursor-default bg-slate-50 text-xs text-slate-600">{f.contract_price !== "" ? Number(f.contract_price).toLocaleString() : "-"}</div>
         </label>
-        <label className="text-[11px] text-slate-500">해상운임 ($/MT)
+        <label className="w-24 shrink-0 text-[11px] text-slate-500">해상운임 ($/MT)
           <input type="number" className="input mt-0.5 text-xs" value={f.freight} onChange={(e) => set("freight", e.target.value)} />
         </label>
-        <label className="text-[11px] text-slate-500">LC 개설처
+        <label className="w-40 shrink-0 text-[11px] text-slate-500">LC 개설처
           <select className="input mt-0.5 text-xs" value={f.lc_type} onChange={(e) => set("lc_type", e.target.value)}>
             {LC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
-        <label className="text-[11px] text-slate-500">가공 Type
+        <label className="w-20 shrink-0 text-[11px] text-slate-500">가공 Type
           <select className="input mt-0.5 text-xs" value={f.proc_type} onChange={(e) => set("proc_type", e.target.value)}>
             {PROC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
-        <label className="text-[11px] text-slate-500">환율 (₩/$)
+        <label className="w-20 shrink-0 text-[11px] text-slate-500">환율 (₩/$)
           <input type="number" className="input mt-0.5 text-xs" value={f.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
         </label>
-        <div className="text-[11px] text-slate-500">
-          스펙 참고 (AV / IV / S) <span className="text-slate-300">· 품질규격과 연동</span>
+        <div className="shrink-0 text-[11px] text-slate-500">
+          AV / IV / S <span className="text-slate-300">(품질규격 연동)</span>
           <div className="mt-0.5 flex items-center gap-1">
-            <input type="number" title="AV" placeholder="AV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
-            <input type="number" title="IV" placeholder="IV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
-            <input type="number" title="S" placeholder="S" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.s_value} onChange={(e) => set("s_value", e.target.value)} />
+            <input type="number" title="AV" placeholder="AV" className="input w-14 px-1 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
+            <input type="number" title="IV" placeholder="IV" className="input w-14 px-1 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
+            <input type="number" title="S" placeholder="S" className="input w-14 px-1 text-xs" value={f.s_value} onChange={(e) => set("s_value", e.target.value)} />
           </div>
         </div>
       </div>
@@ -729,23 +738,33 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
 
       {preview && (
         <div className="mt-2 rounded border border-slate-100 p-2">
-          <div className="mb-1 text-[11px] font-semibold text-slate-400">원가 구성 (물대 → 총원가)</div>
+          <div className="mb-1 text-[11px] font-semibold text-slate-400">원가 구성 (물대 → 총원가) — 항만비~2차운송은 직접 수정 가능</div>
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600">
             <span className="rounded bg-slate-50 px-1.5 py-0.5">물대 ₩{preview.muldePrice.toLocaleString()}</span>
             <span className="text-slate-300">+</span>
-            <span className="rounded bg-slate-50 px-1.5 py-0.5">항만비 ₩{fmtWon(preview.breakdown.customs)}</span>
+            <label className="flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5">
+              항만비 ₩<input type="number" className="w-12 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-right focus:border-brand-400 focus:outline-none" value={f.customs} onChange={(e) => set("customs", e.target.value)} />
+            </label>
             <span className="text-slate-300">+</span>
-            <span className="rounded bg-slate-50 px-1.5 py-0.5">컨테이너운송료 ₩{fmtWon(preview.breakdown.cntr)}</span>
+            <label className="flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5">
+              컨테이너운송료 ₩<input type="number" className="w-12 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-right focus:border-brand-400 focus:outline-none" value={f.cntr} onChange={(e) => set("cntr", e.target.value)} />
+            </label>
             <span className="text-slate-300">+</span>
-            <span className="rounded bg-slate-50 px-1.5 py-0.5">멜팅비 ₩{fmtWon(preview.breakdown.melting)}</span>
+            <label className="flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5">
+              멜팅비 ₩<input type="number" className="w-12 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-right focus:border-brand-400 focus:outline-none" value={f.melting} onChange={(e) => set("melting", e.target.value)} />
+            </label>
             <span className="text-slate-300">+</span>
-            <span className="rounded bg-slate-50 px-1.5 py-0.5">1차운송 ₩{fmtWon(preview.breakdown.transport1)}</span>
+            <label className="flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5">
+              1차운송 ₩<input type="number" className="w-12 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-right focus:border-brand-400 focus:outline-none" value={f.transport1} onChange={(e) => set("transport1", e.target.value)} />
+            </label>
             <span className="text-slate-300">+</span>
             <span className="rounded bg-slate-50 px-1.5 py-0.5">가공비({f.proc_type}) ₩{fmtWon(preview.breakdown.procCost)}</span>
             <span className="text-slate-300">+</span>
             <span className="rounded bg-slate-50 px-1.5 py-0.5">로스비용 ₩{fmtWon(preview.breakdown.lossCost)} <span className="text-slate-400">(로스율 {(preview.breakdown.lossRate * 100).toFixed(1)}%)</span></span>
             <span className="text-slate-300">+</span>
-            <span className="rounded bg-slate-50 px-1.5 py-0.5">2차운송 ₩{fmtWon(preview.breakdown.transport2)}</span>
+            <label className="flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5">
+              2차운송 ₩<input type="number" className="w-12 border-b border-dashed border-slate-300 bg-transparent px-0.5 text-right focus:border-brand-400 focus:outline-none" value={f.transport2} onChange={(e) => set("transport2", e.target.value)} />
+            </label>
             <span className="text-slate-300">=</span>
             <span className="rounded bg-brand-50 px-1.5 py-0.5 font-bold text-brand-700">총원가 ₩{preview.totalCost.toLocaleString()}/kg</span>
           </div>

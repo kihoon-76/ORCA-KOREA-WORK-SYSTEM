@@ -93,7 +93,10 @@ app.get("/price", async (c) => {
 
 app.post("/price", async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const { entity_type, entity_id, shipper, product, quantity, incoterms, contract_price, freight, lc_type, proc_type, exchange_rate, av, iv, s_value, note } = body;
+  const {
+    entity_type, entity_id, shipper, product, quantity, incoterms, contract_price, freight, lc_type, proc_type, exchange_rate, av, iv, s_value,
+    customs, cntr, melting, transport1, transport2, note,
+  } = body;
   if (!entity_type || !entity_id) return c.json({ error: "entity 정보가 필요합니다" }, 400);
 
   const settings = await getPricingSettings(c);
@@ -101,12 +104,18 @@ app.post("/price", async (c) => {
   const proc = settings.processing[proc_type] ?? { cost: 0, loss: 0 };
   const rate = Number(exchange_rate) || settings.exchangeRate;
 
+  // 항만비·컨테이너운송료·멜팅비·1차/2차운송은 건별로 기준정보 기본값을 덮어쓸 수 있다
+  const customsV = customs != null && customs !== "" ? Number(customs) : settings.logistics.customs;
+  const cntrV = cntr != null && cntr !== "" ? Number(cntr) : settings.logistics.cntr;
+  const meltingV = melting != null && melting !== "" ? Number(melting) : settings.logistics.melting;
+  const transport1V = transport1 != null && transport1 !== "" ? Number(transport1) : settings.logistics.transport1;
+  const transport2V = transport2 != null && transport2 !== "" ? Number(transport2) : settings.logistics.transport2;
+
   const buyingPrice = incoterms === "FOB" ? Number(contract_price || 0) + Number(freight || 0) : Number(contract_price || 0);
   const orcaPrice = buyingPrice * (1 + marginRate);
   const muldePrice = roundUp((rate * orcaPrice) / 1000);
   const lossCost = muldePrice * proc.loss;
-  const totalCost = muldePrice + settings.logistics.customs + settings.logistics.cntr + settings.logistics.melting
-    + settings.logistics.transport1 + proc.cost + lossCost + settings.logistics.transport2;
+  const totalCost = muldePrice + customsV + cntrV + meltingV + transport1V + proc.cost + lossCost + transport2V;
   const margin = roundUp(totalCost * settings.salesMarginRate);
   const expectedPrice = totalCost + margin;
   const qty = quantity != null && quantity !== "" ? Number(quantity) : null;
@@ -115,13 +124,15 @@ app.post("/price", async (c) => {
 
   const res = await c.env.DB.prepare(
     `INSERT INTO price_calcs (entity_type, entity_id, shipper, product, quantity, incoterms, contract_price, freight, lc_type, proc_type,
-      exchange_rate, av, iv, s_value, buying_price, orca_price, mulde_price, total_cost, margin, expected_price, total_buy_amount, total_sell_amount, note, created_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      exchange_rate, av, iv, s_value, customs, cntr, melting, transport1, transport2,
+      buying_price, orca_price, mulde_price, total_cost, margin, expected_price, total_buy_amount, total_sell_amount, note, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     entity_type, entity_id, shipper || null, product || null, qty, incoterms || null,
     contract_price != null ? Number(contract_price) : null, freight != null ? Number(freight) : null,
     lc_type || null, proc_type || null, rate,
     av != null && av !== "" ? Number(av) : null, iv != null && iv !== "" ? Number(iv) : null, s_value != null && s_value !== "" ? Number(s_value) : null,
+    customsV, cntrV, meltingV, transport1V, transport2V,
     buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount, note || null, c.get("user").uid
   ).run();
   const row = await c.env.DB.prepare("SELECT * FROM price_calcs WHERE id = ?").bind(res.meta.last_row_id).first();
