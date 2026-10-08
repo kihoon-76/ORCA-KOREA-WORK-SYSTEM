@@ -451,19 +451,19 @@ function fmtWon(n: number) {
 
 // 💰 예상판가 빠른계산 — 쉬퍼 오퍼가를 입력하면 기준정보를 적용해 즉시 예상판가를 계산해서 보여주고,
 // 저장하면 이력으로 쌓인다. 품질규격 비교에서 저장된 AV/IV/S(황) 최신값을 자동으로 불러와 참고로 보여준다.
-function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms }:
-  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string }) {
+function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms, defaultContractPrice }:
+  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string; defaultContractPrice?: number | null }) {
   const [settings, setSettings] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState<any>({
     shipper: defaultShipper || "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: defaultIncoterms || "FOB",
-    contract_price: "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "", av: "", iv: "", s_value: "",
+    contract_price: defaultContractPrice ?? "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "", av: "", iv: "", s_value: "",
   });
-  // 수출자(Shipper)·Incoterms는 이 건의 공급사·거래조건 열과 항상 같은 값을 쓰도록 자동 연동
+  // 수출자(Shipper)·Incoterms·계약금액은 이 건의 공급사·거래조건·단가 열과 항상 같은 값을 쓰도록 자동 연동
   useEffect(() => {
-    setF((p: any) => ({ ...p, shipper: defaultShipper || "", incoterms: defaultIncoterms || "FOB" }));
-  }, [defaultShipper, defaultIncoterms]);
+    setF((p: any) => ({ ...p, shipper: defaultShipper || "", incoterms: defaultIncoterms || "FOB", contract_price: defaultContractPrice ?? "" }));
+  }, [defaultShipper, defaultIncoterms, defaultContractPrice]);
 
   function load() {
     api.get("/calc/settings").then((r) => {
@@ -487,11 +487,11 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
 
   function set(k: string, v: any) { setF((p: any) => ({ ...p, [k]: v })); }
   function loadFrom(h: any) {
-    // 수출자·Incoterms는 항상 현재 공급사/거래조건 열 값을 따르므로 과거 기록 값으로 덮어쓰지 않는다
+    // 수출자·Incoterms·계약금액은 항상 현재 공급사/거래조건/단가 열 값을 따르므로 과거 기록 값으로 덮어쓰지 않는다
     setF((p: any) => ({
       ...p,
       product: h.product || "", quantity: h.quantity ?? "",
-      contract_price: h.contract_price ?? "", freight: h.freight ?? "", lc_type: h.lc_type || LC_TYPES[0], proc_type: h.proc_type || PROC_TYPES[0],
+      freight: h.freight ?? "", lc_type: h.lc_type || LC_TYPES[0], proc_type: h.proc_type || PROC_TYPES[0],
       exchange_rate: h.exchange_rate ?? "", av: h.av ?? "", iv: h.iv ?? "", s_value: h.s_value ?? "",
     }));
   }
@@ -524,7 +524,8 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
         <span>수출자(Shipper) <span className="font-semibold text-slate-700">{f.shipper || "-"}</span></span>
         <span>Incoterms <span className="font-semibold text-slate-700">{f.incoterms || "-"}</span></span>
-        <span className="text-slate-400">— 위 공급사 · 거래조건 열과 자동 연동됩니다 (바꾸려면 행에서 직접 수정)</span>
+        <span>계약금액 <span className="font-semibold text-slate-700">{f.contract_price !== "" ? `$${Number(f.contract_price).toLocaleString()}/MT` : "-"}</span></span>
+        <span className="text-slate-400">— 위 공급사 · 거래조건 · 단가 열과 자동 연동됩니다 (바꾸려면 행에서 직접 수정)</span>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <label className="text-[11px] text-slate-500">품목명
@@ -532,9 +533,6 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
         </label>
         <label className="text-[11px] text-slate-500">수량 (MT)
           <input type="number" className="input mt-0.5 text-xs" value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
-        </label>
-        <label className="text-[11px] text-slate-500">계약금액 ($/MT)
-          <input type="number" className="input mt-0.5 text-xs" value={f.contract_price} onChange={(e) => set("contract_price", e.target.value)} />
         </label>
         <label className="text-[11px] text-slate-500">해상운임 ($/MT)
           <input type="number" className="input mt-0.5 text-xs" value={f.freight} onChange={(e) => set("freight", e.target.value)} />
@@ -552,15 +550,14 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
         <label className="text-[11px] text-slate-500">환율 (₩/$)
           <input type="number" className="input mt-0.5 text-xs" value={f.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
         </label>
-        <label className="text-[11px] text-slate-500">AV (참고)
-          <input type="number" className="input mt-0.5 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
-        </label>
-        <label className="text-[11px] text-slate-500">IV (참고)
-          <input type="number" className="input mt-0.5 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
-        </label>
-        <label className="text-[11px] text-slate-500">S (참고)
-          <input type="number" className="input mt-0.5 text-xs" value={f.s_value} onChange={(e) => set("s_value", e.target.value)} />
-        </label>
+        <div className="text-[11px] text-slate-500">
+          스펙 참고 (AV / IV / S)
+          <div className="mt-0.5 flex items-center gap-1">
+            <input type="number" title="AV" placeholder="AV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
+            <input type="number" title="IV" placeholder="IV" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
+            <input type="number" title="S" placeholder="S" className="input w-0 min-w-0 flex-1 px-1 text-xs" value={f.s_value} onChange={(e) => set("s_value", e.target.value)} />
+          </div>
+        </div>
       </div>
 
       {preview && (
@@ -928,7 +925,7 @@ export default function TradeModule({ config }: { config: Config }) {
                               <div className="mt-3"><QualityPanel entityType={config.entityType} entityId={r.id} /></div>
                             )}
                             {openSubPanels.has(`price_${r.id}`) && (
-                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} /></div>
+                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} /></div>
                             )}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
