@@ -518,7 +518,7 @@ function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity,
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3" onClick={(e) => e.stopPropagation()}>
       <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs font-semibold text-slate-600">💰 예상판가 빠른계산</div>
+        <div className="text-xs font-semibold text-slate-600">💰 원가계산 (예상판가 빠른계산)</div>
         <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "계산 저장"}</button>
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
@@ -910,7 +910,7 @@ export default function TradeModule({ config }: { config: Config }) {
                                   <button type="button"
                                     className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`price_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
                                     onClick={() => toggleSubPanel(`price_${r.id}`)}>
-                                    💰 예상판가
+                                    💰 원가계산
                                   </button>
                                 </>
                               )}
