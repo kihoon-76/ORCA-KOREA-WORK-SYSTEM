@@ -838,6 +838,8 @@ export default function TradeModule({ config }: { config: Config }) {
   const [openSubPanels, setOpenSubPanels] = useState<Set<string>>(new Set());
   // 품질규격에서 입력 중인 AV/IV/S 값을 저장 전에도 원가계산 쪽에 바로 반영하기 위한 건별 임시 저장소
   const [qualityDraft, setQualityDraft] = useState<Record<number, Record<string, string>>>({});
+  // 품질규격/원가계산 중 나중에 연 패널이 항상 위쪽에 보이도록 건별로 순서를 기억한다
+  const [calcPanelOrder, setCalcPanelOrder] = useState<Record<number, "quality" | "price">>({});
   function toggleSubPanel(key: string) {
     setOpenSubPanels((prev) => {
       const next = new Set(prev);
@@ -845,10 +847,15 @@ export default function TradeModule({ config }: { config: Config }) {
       return next;
     });
   }
-  // 품질규격/원가계산 패널은 둘 다 펼쳐지면 길어져서, 새로 연 패널이 화면에 바로 보이도록 스크롤까지 같이 해준다
+  // 품질규격/원가계산 패널은 둘 다 펼쳐지면 길어져서, 새로 연 패널이 화면에 바로(스크롤 없이) 보이도록 맨 위로 올리고 스크롤까지 같이 해준다
   function toggleSubPanelAndScroll(key: string) {
     const willOpen = !openSubPanels.has(key);
     toggleSubPanel(key);
+    const m = key.match(/^(quality|price)_(\d+)$/);
+    if (willOpen && m) {
+      const [, type, idStr] = m;
+      setCalcPanelOrder((prev) => ({ ...prev, [Number(idStr)]: type as "quality" | "price" }));
+    }
     if (willOpen) {
       setTimeout(() => {
         document.getElementById(`subpanel_${key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1119,18 +1126,22 @@ export default function TradeModule({ config }: { config: Config }) {
                             {openSubPanels.has(`note_${r.id}`) && (
                               <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
                             )}
-                            {openSubPanels.has(`quality_${r.id}`) && (
-                              <div className="mt-3 scroll-mt-20" id={`subpanel_quality_${r.id}`}>
-                                <QualityPanel entityType={config.entityType} entityId={r.id} draft={qualityDraft[r.id]}
-                                  onDraftChange={(m) => setQualityDraft((p) => ({ ...p, [r.id]: m }))} />
-                              </div>
-                            )}
-                            {openSubPanels.has(`price_${r.id}`) && (
-                              <div className="mt-3 scroll-mt-20" id={`subpanel_price_${r.id}`}>
-                                <PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
-                                  defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft[r.id]} />
-                              </div>
-                            )}
+                            {(() => {
+                              // 나중에 연 패널(품질규격/원가계산)이 항상 위쪽에 보이도록 순서를 맞춰서 렌더링
+                              const quality = openSubPanels.has(`quality_${r.id}`) && (
+                                <div className="mt-3 scroll-mt-20" id={`subpanel_quality_${r.id}`} key="quality">
+                                  <QualityPanel entityType={config.entityType} entityId={r.id} draft={qualityDraft[r.id]}
+                                    onDraftChange={(m) => setQualityDraft((p) => ({ ...p, [r.id]: m }))} />
+                                </div>
+                              );
+                              const price = openSubPanels.has(`price_${r.id}`) && (
+                                <div className="mt-3 scroll-mt-20" id={`subpanel_price_${r.id}`} key="price">
+                                  <PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
+                                    defaultShipper={r[config.partnerKey]} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft[r.id]} />
+                                </div>
+                              );
+                              return calcPanelOrder[r.id] === "price" ? <>{price}{quality}</> : <>{quality}{price}</>;
+                            })()}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
