@@ -501,16 +501,21 @@ function QualityPanel({ entityType, entityId, draft, onDraftChange }:
         // 1열을 끝까지 다 채운 다음 2열로 넘어가도록(가로로 번갈아 섞이지 않게) 배열을 반으로 나눠서 각자 렌더링한다
         const mid = Math.ceil(SPEC_ITEMS.length / 2);
         const columns = [SPEC_ITEMS.slice(0, mid), SPEC_ITEMS.slice(mid)];
+        // 원가계산(예상판가)에서 그대로 쓰이는 AV/IV/S(황)는 눈에 띄게 강조 표시
+        const PRICE_LINKED_KEYS = new Set(["av", "iv", "s"]);
         const renderRow = (spec: SpecItem) => {
           const isSiAlFe = spec.group === "si_al_fe";
           const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
           const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
+          const highlighted = PRICE_LINKED_KEYS.has(spec.key);
           return (
-            <div key={spec.key} className="flex items-center gap-1.5 border-b border-slate-50 py-1 text-[11px]">
-              <span className="w-[130px] shrink-0 whitespace-nowrap font-semibold text-slate-700" title={spec.item}>{spec.abbr}</span>
-              <span className="w-[170px] shrink-0 whitespace-nowrap text-slate-400" title={spec.specLabel}>{spec.specLabel}</span>
+            <div key={spec.key} className={`flex items-center gap-1.5 rounded border-b py-1 text-[11px] ${highlighted ? "border-amber-100 bg-amber-50/70 px-1.5" : "border-slate-50"}`}>
+              <span className={`w-[130px] shrink-0 whitespace-nowrap font-semibold ${highlighted ? "text-amber-800" : "text-slate-700"}`} title={spec.item}>
+                {highlighted && "⭐ "}{spec.abbr}
+              </span>
+              <span className={`w-[170px] shrink-0 whitespace-nowrap ${highlighted ? "text-amber-600" : "text-slate-400"}`} title={spec.specLabel}>{spec.specLabel}</span>
               <input
-                className="w-12 shrink-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] focus:border-brand-400 focus:outline-none"
+                className={`w-12 shrink-0 rounded border bg-white px-1 py-0.5 text-[11px] focus:outline-none ${highlighted ? "border-amber-300 focus:border-amber-500" : "border-slate-200 focus:border-brand-400"}`}
                 value={measured[spec.key] ?? ""}
                 placeholder={spec.criterion === "등급" ? "1b" : ""}
                 onChange={(e) => setVal(spec.key, e.target.value)}
