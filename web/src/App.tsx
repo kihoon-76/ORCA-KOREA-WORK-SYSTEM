@@ -21,6 +21,7 @@ import Users from "./pages/Users";
 import Chat from "./pages/Chat";
 import Meetings from "./pages/Meetings";
 import Drive from "./pages/Drive";
+import CalcSettings from "./pages/CalcSettings";
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 const NAV: { group: string; items: NavItem[] }[] = [
@@ -43,6 +44,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/exports", label: "원료 수출현황", icon: "local_shipping" },
     { to: "/inventory", label: "재고관리", icon: "inventory_2" },
     { to: "/materials", label: "원료 / 분석결과", icon: "science" },
+    { to: "/calc-settings", label: "기준정보 설정", icon: "tune" },
   ]},
   { group: "Admin", items: [
     { to: "/trips", label: "출장관리", icon: "flight" },
@@ -170,6 +172,7 @@ export default function App() {
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/materials" element={<Materials />} />
+        <Route path="/calc-settings" element={<CalcSettings />} />
         <Route path="/trips" element={<Trips />} />
         {user.role === "admin" && <Route path="/users" element={<Users />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

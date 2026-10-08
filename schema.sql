@@ -285,3 +285,55 @@ CREATE TABLE IF NOT EXISTS meetings (
   active        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============ 품질규격 비교 / 예상판가 계산 (원료 수입 품목 연동) ============
+-- 기준정보(환율, LC개설처별 마진율, 물류비, 가공비·로스율, 오르카 판매 마진율) — key-value, value는 JSON
+CREATE TABLE IF NOT EXISTS app_settings (
+  key           TEXT PRIMARY KEY,
+  value         TEXT NOT NULL,
+  updated_by    INTEGER REFERENCES users(id),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 품질규격 측정값 기록 (entity_type/entity_id로 원료수입 건에 연결, 저장할 때마다 이력으로 쌓임)
+CREATE TABLE IF NOT EXISTS quality_results (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type   TEXT NOT NULL,
+  entity_id     INTEGER NOT NULL,
+  measured      TEXT NOT NULL,   -- JSON { 항목키: 측정값 }
+  note          TEXT,
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_quality_results_entity ON quality_results(entity_type, entity_id, id DESC);
+
+-- 예상판가 계산 기록 (입력값 + 계산결과를 함께 저장, 저장할 때마다 이력으로 쌓임)
+CREATE TABLE IF NOT EXISTS price_calcs (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type         TEXT NOT NULL,
+  entity_id           INTEGER NOT NULL,
+  shipper             TEXT,
+  product             TEXT,
+  quantity            REAL,
+  incoterms           TEXT,
+  contract_price      REAL,   -- 계약금액 ($/MT)
+  freight             REAL,   -- 해상운임 ($/MT)
+  lc_type             TEXT,
+  proc_type           TEXT,
+  exchange_rate       REAL,
+  av                  REAL,
+  iv                  REAL,
+  s_value             REAL,
+  buying_price        REAL,   -- Buying Price ($/MT)
+  orca_price          REAL,   -- Orca Price ($/MT)
+  mulde_price         REAL,   -- 물대Price (₩/kg)
+  total_cost          REAL,   -- 총원가 (₩/kg)
+  margin              REAL,   -- 마진 (₩/kg)
+  expected_price       REAL,   -- 예상판가 (₩/kg)
+  total_buy_amount     REAL,   -- 총구매금액 ($)
+  total_sell_amount    REAL,   -- 총예상판매금액 (₩)
+  note                TEXT,
+  created_by          INTEGER REFERENCES users(id),
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_price_calcs_entity ON price_calcs(entity_type, entity_id, id DESC);

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { PageHeader, Spinner, Empty, Modal, Field, useList } from "../components/ui";
+import { SPEC_ITEMS, judgeItem, judgeSiAlFeGroup, recommendedAction, summarize } from "../qualitySpec";
 
 interface Config {
   kind: "import" | "export";
@@ -296,6 +297,296 @@ function InlineField({ icon, label, value, placeholder, onCommit }:
   );
 }
 
+// 🧪 품질규격 비교 — 측정값을 입력하면 [기력용 바이오중유 품질규격] 기준과 즉시 비교해서 보여주고,
+// 저장하면 이력으로 쌓인다(과거 기록 불러오기/삭제 가능).
+function QualityPanel({ entityType, entityId }: { entityType: string; entityId: number }) {
+  const [history, setHistory] = useState<any[]>([]);
+  const [measured, setMeasured] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+
+  function load() {
+    api.get(`/calc/quality?entity_type=${entityType}&entity_id=${entityId}`).then((r) => {
+      const items = r.items || [];
+      setHistory(items);
+      if (!loadedOnce && items[0]) {
+        setMeasured(Object.fromEntries(Object.entries(items[0].measured).map(([k, v]) => [k, String(v)])));
+      }
+      setLoadedOnce(true);
+    });
+  }
+  useEffect(load, [entityType, entityId]);
+
+  function setVal(key: string, v: string) {
+    setMeasured((p) => ({ ...p, [key]: v }));
+  }
+  function loadFrom(h: any) {
+    setMeasured(Object.fromEntries(Object.entries(h.measured).map(([k, v]) => [k, String(v)])));
+  }
+
+  const summary = summarize(measured);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const clean: Record<string, string | number> = {};
+      for (const spec of SPEC_ITEMS) {
+        const v = measured[spec.key];
+        if (v === undefined || v === "" || v === null) continue;
+        clean[spec.key] = spec.criterion === "등급" ? v : Number(v);
+      }
+      await api.post("/calc/quality", { entity_type: entityType, entity_id: entityId, measured: clean });
+      load();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function removeHist(id: number) {
+    if (!confirm("이 측정 기록을 삭제하시겠습니까?")) return;
+    await api.del(`/calc/quality/${id}`);
+    load();
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-slate-600">🧪 품질규격 비교</div>
+        <div className="flex items-center gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${summary.total === 0 ? "bg-slate-100 text-slate-400" : summary.bad > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+            {summary.total === 0 ? "측정값을 입력하세요" : summary.bad > 0 ? `부적합 ${summary.bad}개` : "전체 적합"}
+          </span>
+          <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "저장"}</button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[480px] text-xs">
+          <thead>
+            <tr className="text-left text-slate-400">
+              <th className="py-1 pr-2">항목</th><th className="py-1 pr-2">품질규격</th><th className="w-20 py-1 pr-2">측정값</th><th className="py-1 pr-2">판정</th><th className="py-1">권장 처리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SPEC_ITEMS.map((spec) => {
+              const isSiAlFe = spec.group === "si_al_fe";
+              const verdict = isSiAlFe ? (spec.key === "si" ? judgeSiAlFeGroup(measured) : "") : judgeItem(spec, measured[spec.key]);
+              const action = isSiAlFe && spec.key !== "si" ? "" : recommendedAction(spec, verdict as any);
+              return (
+                <tr key={spec.key} className="border-t border-slate-100">
+                  <td className="py-1 pr-2">{spec.item}<div className="text-[10px] text-slate-400">{spec.abbr}</div></td>
+                  <td className="py-1 pr-2 text-slate-500">{spec.specLabel}</td>
+                  <td className="py-1 pr-2">
+                    <input
+                      className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs focus:border-brand-400 focus:outline-none"
+                      value={measured[spec.key] ?? ""}
+                      placeholder={spec.criterion === "등급" ? "예: 1b" : ""}
+                      onChange={(e) => setVal(spec.key, e.target.value)}
+                    />
+                  </td>
+                  <td className="py-1 pr-2">
+                    {verdict && <span className={`font-semibold ${verdict === "부적합" ? "text-red-600" : verdict === "적합" ? "text-green-600" : "text-slate-400"}`}>{verdict}</span>}
+                  </td>
+                  <td className="py-1 text-slate-500">{action}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {history.length > 0 && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <div className="mb-1 text-[11px] font-semibold text-slate-400">측정 기록</div>
+          <ul className="space-y-1">
+            {history.map((h) => {
+              const hs = summarize(h.measured);
+              return (
+                <li key={h.id} className="flex flex-wrap items-center justify-between gap-1 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+                  <span>{new Date(h.created_at).toLocaleString("ko-KR")} · {h.created_by_name || "-"} · {hs.total === 0 ? "측정값 없음" : hs.bad > 0 ? `부적합 ${hs.bad}개` : "전체 적합"}</span>
+                  <span className="flex items-center gap-2">
+                    <button className="text-brand-600 hover:underline" onClick={() => loadFrom(h)}>불러오기</button>
+                    <button className="text-slate-400 hover:text-red-500" onClick={() => removeHist(h.id)}>삭제</button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LC_TYPES = ["매입처(타사) LC 개설", "오르카(당사) LC 개설 - Usance"];
+const PROC_TYPES = ["탈수", "탈검", "블랜딩", "없음"];
+
+// [예상판가 빠른계산] 탭의 계산식을 그대로 옮긴 것 — 기준정보(환율·마진율·물류비·가공비/로스율)에 폼 입력값을 적용한다.
+function computePrice(settings: any, f: any) {
+  if (!settings) return null;
+  const marginRate = settings.lcMargin[f.lc_type] ?? 0;
+  const proc = settings.processing[f.proc_type] ?? { cost: 0, loss: 0 };
+  const rate = Number(f.exchange_rate) || settings.exchangeRate;
+  const contractPrice = Number(f.contract_price) || 0;
+  const freight = Number(f.freight) || 0;
+  const buyingPrice = f.incoterms === "FOB" ? contractPrice + freight : contractPrice;
+  const orcaPrice = buyingPrice * (1 + marginRate);
+  const muldePrice = Math.ceil((rate * orcaPrice) / 1000);
+  const lossCost = muldePrice * proc.loss;
+  const totalCost = muldePrice + settings.logistics.customs + settings.logistics.cntr + settings.logistics.melting
+    + settings.logistics.transport1 + proc.cost + lossCost + settings.logistics.transport2;
+  const margin = Math.ceil(totalCost * settings.salesMarginRate);
+  const expectedPrice = totalCost + margin;
+  const qty = f.quantity !== "" && f.quantity != null ? Number(f.quantity) : null;
+  const totalBuyAmount = qty != null ? qty * buyingPrice : null;
+  const totalSellAmount = qty != null ? qty * 1000 * expectedPrice : null;
+  return { buyingPrice, orcaPrice, muldePrice, totalCost, margin, expectedPrice, totalBuyAmount, totalSellAmount };
+}
+
+// 💰 예상판가 빠른계산 — 쉬퍼 오퍼가를 입력하면 기준정보를 적용해 즉시 예상판가를 계산해서 보여주고,
+// 저장하면 이력으로 쌓인다. 품질규격 비교에서 저장된 AV/IV/S(황) 최신값을 자동으로 불러와 참고로 보여준다.
+function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity }:
+  { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null }) {
+  const [settings, setSettings] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [f, setF] = useState<any>({
+    shipper: "", product: defaultProduct || "", quantity: defaultQuantity ?? "", incoterms: "FOB",
+    contract_price: "", freight: "", lc_type: LC_TYPES[0], proc_type: PROC_TYPES[0], exchange_rate: "", av: "", iv: "", s_value: "",
+  });
+
+  function load() {
+    api.get("/calc/settings").then((r) => {
+      setSettings(r.item);
+      setF((p: any) => ({ ...p, exchange_rate: p.exchange_rate || r.item.exchangeRate }));
+    });
+    api.get(`/calc/price?entity_type=${entityType}&entity_id=${entityId}`).then((r) => setHistory(r.items || []));
+    api.get(`/calc/quality?entity_type=${entityType}&entity_id=${entityId}`).then((r) => {
+      const latest = r.items?.[0];
+      if (latest) {
+        setF((p: any) => ({
+          ...p,
+          av: p.av || latest.measured.av || "",
+          iv: p.iv || latest.measured.iv || "",
+          s_value: p.s_value || latest.measured.s || "",
+        }));
+      }
+    });
+  }
+  useEffect(load, [entityType, entityId]);
+
+  function set(k: string, v: any) { setF((p: any) => ({ ...p, [k]: v })); }
+  function loadFrom(h: any) {
+    setF({
+      shipper: h.shipper || "", product: h.product || "", quantity: h.quantity ?? "", incoterms: h.incoterms || "FOB",
+      contract_price: h.contract_price ?? "", freight: h.freight ?? "", lc_type: h.lc_type || LC_TYPES[0], proc_type: h.proc_type || PROC_TYPES[0],
+      exchange_rate: h.exchange_rate ?? "", av: h.av ?? "", iv: h.iv ?? "", s_value: h.s_value ?? "",
+    });
+  }
+
+  const preview = computePrice(settings, f);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.post("/calc/price", { entity_type: entityType, entity_id: entityId, ...f });
+      load();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function removeHist(id: number) {
+    if (!confirm("이 계산 기록을 삭제하시겠습니까?")) return;
+    await api.del(`/calc/price/${id}`);
+    load();
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-semibold text-slate-600">💰 예상판가 빠른계산</div>
+        <button className="btn-secondary whitespace-nowrap px-2 py-1 text-xs" onClick={save} disabled={saving}>{saving ? "저장중..." : "계산 저장"}</button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label className="text-[11px] text-slate-500">수출자(Shipper)
+          <input className="input mt-0.5 text-xs" value={f.shipper} onChange={(e) => set("shipper", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">품목명
+          <input className="input mt-0.5 text-xs" value={f.product} onChange={(e) => set("product", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">수량 (MT)
+          <input type="number" className="input mt-0.5 text-xs" value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">Incoterms
+          <select className="input mt-0.5 text-xs" value={f.incoterms} onChange={(e) => set("incoterms", e.target.value)}>
+            <option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-slate-500">계약금액 ($/MT)
+          <input type="number" className="input mt-0.5 text-xs" value={f.contract_price} onChange={(e) => set("contract_price", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">해상운임 ($/MT)
+          <input type="number" className="input mt-0.5 text-xs" value={f.freight} onChange={(e) => set("freight", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">LC 개설처
+          <select className="input mt-0.5 text-xs" value={f.lc_type} onChange={(e) => set("lc_type", e.target.value)}>
+            {LC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="text-[11px] text-slate-500">가공 Type
+          <select className="input mt-0.5 text-xs" value={f.proc_type} onChange={(e) => set("proc_type", e.target.value)}>
+            {PROC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="text-[11px] text-slate-500">환율 (₩/$)
+          <input type="number" className="input mt-0.5 text-xs" value={f.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">AV (참고)
+          <input type="number" className="input mt-0.5 text-xs" value={f.av} onChange={(e) => set("av", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">IV (참고)
+          <input type="number" className="input mt-0.5 text-xs" value={f.iv} onChange={(e) => set("iv", e.target.value)} />
+        </label>
+        <label className="text-[11px] text-slate-500">S (참고)
+          <input type="number" className="input mt-0.5 text-xs" value={f.s_value} onChange={(e) => set("s_value", e.target.value)} />
+        </label>
+      </div>
+
+      {preview && (
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded bg-slate-50 p-2 text-xs sm:grid-cols-4">
+          <div><span className="text-slate-400">Buying Price</span><div className="font-bold">${preview.buyingPrice.toLocaleString()}/MT</div></div>
+          <div><span className="text-slate-400">Orca Price</span><div className="font-bold">${preview.orcaPrice.toFixed(2)}/MT</div></div>
+          <div><span className="text-slate-400">물대</span><div className="font-bold">₩{preview.muldePrice.toLocaleString()}/kg</div></div>
+          <div><span className="text-slate-400">총원가</span><div className="font-bold">₩{preview.totalCost.toLocaleString()}/kg</div></div>
+          <div><span className="text-slate-400">마진</span><div className="font-bold">₩{preview.margin.toLocaleString()}/kg</div></div>
+          <div className="sm:col-span-2"><span className="text-slate-400">예상판가</span><div className="text-base font-extrabold text-brand-700">₩{preview.expectedPrice.toLocaleString()}/kg</div></div>
+          {preview.totalSellAmount != null && (
+            <div className="text-slate-500 sm:col-span-4">총구매금액 ${preview.totalBuyAmount?.toLocaleString()} · 총예상판매금액 ₩{preview.totalSellAmount?.toLocaleString()}</div>
+          )}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <div className="mb-1 text-[11px] font-semibold text-slate-400">계산 기록</div>
+          <ul className="space-y-1">
+            {history.map((h) => (
+              <li key={h.id} className="flex flex-wrap items-center justify-between gap-1 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+                <span>{new Date(h.created_at).toLocaleString("ko-KR")} · {h.shipper || "-"} {h.product || ""} · 예상판가 ₩{Number(h.expected_price).toLocaleString()}/kg</span>
+                <span className="flex items-center gap-2">
+                  <button className="text-brand-600 hover:underline" onClick={() => loadFrom(h)}>불러오기</button>
+                  <button className="text-slate-400 hover:text-red-500" onClick={() => removeHist(h.id)}>삭제</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 클릭해서 정렬할 수 있는 열 제목 — 항상 보이는 정렬 아이콘 버튼으로 정렬 가능함을 뚜렷하게 표시
 function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: "asc" | "desc" | null; onClick: () => void }) {
   return (
@@ -577,12 +868,32 @@ export default function TradeModule({ config }: { config: Config }) {
                                 onClick={() => toggleSubPanel(`note_${r.id}`)}>
                                 📝 메모{r.note ? " ✓" : ""}
                               </button>
+                              {config.kind === "import" && (
+                                <>
+                                  <button type="button"
+                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`quality_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
+                                    onClick={() => toggleSubPanel(`quality_${r.id}`)}>
+                                    🧪 품질규격
+                                  </button>
+                                  <button type="button"
+                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${openSubPanels.has(`price_${r.id}`) ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}
+                                    onClick={() => toggleSubPanel(`price_${r.id}`)}>
+                                    💰 예상판가
+                                  </button>
+                                </>
+                              )}
                             </div>
                             {openSubPanels.has(`bl_${r.id}`) && (
                               <InlineField icon="🚢" label="BL번호" value={r.bl_no} placeholder="B/L 번호를 입력하세요" onCommit={(v) => commitField(r, "bl_no", v)} />
                             )}
                             {openSubPanels.has(`note_${r.id}`) && (
                               <NoteBox value={r.note} onCommit={(v) => commitField(r, "note", v)} />
+                            )}
+                            {openSubPanels.has(`quality_${r.id}`) && (
+                              <div className="mt-3"><QualityPanel entityType={config.entityType} entityId={r.id} /></div>
+                            )}
+                            {openSubPanels.has(`price_${r.id}`) && (
+                              <div className="mt-3"><PriceCalcPanel entityType={config.entityType} entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity} /></div>
                             )}
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <AttachmentPanel entityType={config.entityType} entityId={r.id} category="contract" label="📄 계약서" />
