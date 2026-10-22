@@ -151,6 +151,15 @@ export default function ImportMap() {
     return Array.from(s).sort();
   }, [imports]);
 
+  // 기간(연도) 필터를 뺀 나머지 조건 — 월별 그래프는 계약일이 아니라 ETA로 달을 나누기 때문에 따로 쓴다
+  const rowsAllYears = useMemo(() => (imports || []).filter((r) => {
+    if (material && r.material_name !== material) return false;
+    if (stage === "transit" && !IN_TRANSIT.has(r.status)) return false;
+    if (stage === "contracted" && r.status !== "contracted") return false;
+    if (stage === "after" && (r.status === "contracted" || IN_TRANSIT.has(r.status))) return false;
+    return true;
+  }), [imports, material, stage]);
+
   const rows = useMemo(() => (imports || []).filter((r) => {
     if (year && !String(r.contract_date || "").startsWith(year)) return false;
     if (material && r.material_name !== material) return false;
@@ -328,7 +337,7 @@ export default function ImportMap() {
       {/* 월별 물량 + 최근 기록 */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-4">
-          <MonthlyChart rows={rows} year={year} />
+          <MonthlyChart rows={rowsAllYears} year={year} />
         </div>
         <div className="card flex max-h-[360px] flex-col overflow-hidden">
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-bold text-primary">최근 수입 기록</div>
@@ -652,22 +661,26 @@ function LocationDetail({ g, onClose, onEdit }: { g: Group; onClose: () => void;
   );
 }
 
-// 월별 수입 물량 (계약일 기준) — 한 가지 값만 보여주는 막대그래프
+// 월별 수입 물량 (ETA 도착 기준) — 예: ETD 9-26 / ETA 10-24 인 건은 10월 물량
 function MonthlyChart({ rows, year }: { rows: any[]; year: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  const now = new Date();
+  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const noEta = rows.filter((r) => !r.eta);
+  const noEtaQty = noEta.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
   const months = useMemo(() => {
     const list: { ym: string; label: string }[] = [];
     if (year) {
       for (let m = 1; m <= 12; m++) list.push({ ym: `${year}-${String(m).padStart(2, "0")}`, label: `${m}월` });
     } else {
-      const now = new Date();
-      for (let i = 11; i >= 0; i--) {
+      // 도착 예정 물량도 보이도록 지난 9개월 ~ 이번 달 ~ 2개월 뒤까지
+      for (let i = 9; i >= -2; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         list.push({ ym: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${d.getMonth() + 1}월` });
       }
     }
     return list.map((m) => {
-      const rs = rows.filter((r) => String(r.contract_date || "").startsWith(m.ym));
+      const rs = rows.filter((r) => String(r.eta || "").startsWith(m.ym));
       return { ...m, qty: rs.reduce((a, r) => a + (Number(r.quantity) || 0), 0), count: rs.length };
     });
   }, [rows, year]);
@@ -677,7 +690,7 @@ function MonthlyChart({ rows, year }: { rows: any[]; year: string }) {
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <div className="text-sm font-bold text-primary">월별 수입 물량 <span className="text-xs font-normal text-slate-400">(계약일 기준{year ? `, ${year}년` : ", 최근 12개월"})</span></div>
+        <div className="text-sm font-bold text-primary">월별 수입 물량 <span className="text-xs font-normal text-slate-400">(ETA 도착 기준{year ? `, ${year}년` : ""})</span></div>
         <div className="text-xs text-slate-500">합계 {fmtNum(total)} MT</div>
       </div>
       <div className="relative mt-4 flex h-44 items-end gap-[2px] border-b border-slate-200">
@@ -687,17 +700,26 @@ function MonthlyChart({ rows, year }: { rows: any[]; year: string }) {
           <div key={m.ym} className="relative flex h-full flex-1 items-end justify-center"
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <div className="w-full max-w-[28px] rounded-t transition-opacity"
-              style={{ height: `${(m.qty / max) * 100}%`, minHeight: m.qty > 0 ? 2 : 0, background: COLOR_DONE, opacity: hover === null || hover === i ? 1 : 0.45 }} />
+              style={{
+                height: `${(m.qty / max) * 100}%`, minHeight: m.qty > 0 ? 2 : 0,
+                // 이번 달 이후(아직 도착 전)는 빗금 막대로 구분
+                background: m.ym > curYm ? `repeating-linear-gradient(135deg, ${COLOR_DONE} 0 4px, #9fb0e0 4px 7px)` : COLOR_DONE,
+                opacity: hover === null || hover === i ? 1 : 0.45,
+              }} />
             {hover === i && (
               <div className="pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded bg-primary px-2 py-1 text-[11px] text-white shadow">
-                {m.ym.replace("-", "년 ")}월 · <b>{fmtNum(m.qty)} MT</b> · {m.count}건
+                {m.ym.replace("-", "년 ")}월 {m.ym > curYm ? "도착 예정" : m.ym === curYm ? "도착(예정 포함)" : "도착"} · <b>{fmtNum(m.qty)} MT</b> · {m.count}건
               </div>
             )}
           </div>
         ))}
       </div>
       <div className="mt-1 flex gap-[2px]">
-        {months.map((m) => <div key={m.ym} className="flex-1 text-center text-[10px] text-slate-400">{m.label}</div>)}
+        {months.map((m) => <div key={m.ym} className={`flex-1 text-center text-[10px] ${m.ym === curYm ? "font-bold text-primary" : "text-slate-400"}`}>{m.label}</div>)}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: `repeating-linear-gradient(135deg, ${COLOR_DONE} 0 3px, #9fb0e0 3px 5px)` }} /> 빗금 = 도착 예정</span>
+        {noEta.length > 0 && <span>ETA 미입력 {noEta.length}건 ({fmtNum(noEtaQty)} MT)은 그래프에서 빠져 있어요</span>}
       </div>
     </div>
   );
