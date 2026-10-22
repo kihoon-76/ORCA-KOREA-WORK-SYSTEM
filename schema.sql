@@ -354,6 +354,7 @@ CREATE TABLE IF NOT EXISTS supplier_locations (
   region        TEXT,                   -- 지역 / 항구 (예: Mundra, 샤먼항)
   lat           REAL NOT NULL,
   lng           REAL NOT NULL,
+  domestic      INTEGER NOT NULL DEFAULT 0,  -- 1 = 국내 공급사 (지도에 항로 선 없이 국내로 표시)
   note          TEXT,
   updated_by    INTEGER REFERENCES users(id),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))

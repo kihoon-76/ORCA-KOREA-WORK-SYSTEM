@@ -29,11 +29,12 @@ app.put("/suppliers", async (c) => {
     return c.json({ error: "위치(좌표)를 지정해 주세요" }, 400);
   }
   await c.env.DB.prepare(
-    `INSERT INTO supplier_locations (supplier_key, supplier, country, region, lat, lng, note, updated_by, updated_at)
-     VALUES (?,?,?,?,?,?,?,?, datetime('now'))
+    `INSERT INTO supplier_locations (supplier_key, supplier, country, region, lat, lng, domestic, note, updated_by, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?, datetime('now'))
      ON CONFLICT(supplier_key) DO UPDATE SET supplier = excluded.supplier, country = excluded.country, region = excluded.region,
-       lat = excluded.lat, lng = excluded.lng, note = excluded.note, updated_by = excluded.updated_by, updated_at = datetime('now')`
-  ).bind(normKey(supplier), supplier, b.country || null, b.region || null, lat, lng, b.note || null, c.get("user").uid).run();
+       lat = excluded.lat, lng = excluded.lng, domestic = excluded.domestic, note = excluded.note,
+       updated_by = excluded.updated_by, updated_at = datetime('now')`
+  ).bind(normKey(supplier), supplier, b.country || null, b.region || null, lat, lng, b.domestic ? 1 : 0, b.note || null, c.get("user").uid).run();
   const row = await c.env.DB.prepare("SELECT * FROM supplier_locations WHERE supplier_key = ?").bind(normKey(supplier)).first();
   return c.json({ ok: true, item: row });
 });

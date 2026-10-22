@@ -20,6 +20,7 @@ function makeBaseLayer() {
 const COLOR_DONE = "#4059aa";    // 계약 / 도착 이후
 const COLOR_TRANSIT = "#d97706"; // 이동 중 (선적~통관)
 const COLOR_DEST = "#001629";
+const COLOR_DOMESTIC = "#0d9488"; // 국내 공급사
 
 const STATUS_LABEL: Record<string, string> = {
   contracted: "계약", shipped: "선적", customs: "통관", stored: "입고", processed: "가공", released: "출고", settled: "정산",
@@ -94,6 +95,7 @@ interface Group {
   rows: any[];
   qty: number;
   transit: number;
+  domestic: boolean;
 }
 
 // ───────────────────────── 페이지 ─────────────────────────
@@ -104,6 +106,7 @@ export default function ImportMap() {
   const [year, setYear] = useState("");
   const [stage, setStage] = useState("");
   const [material, setMaterial] = useState("");
+  const [origin, setOrigin] = useState(""); // "" 전체 | overseas 해외 수입 | domestic 국내 매입
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [managerFocus, setManagerFocus] = useState<string | null>(null);
@@ -132,23 +135,29 @@ export default function ImportMap() {
     return Array.from(s).sort();
   }, [imports]);
 
+  // 국내 공급사 여부 (공급사 위치 관리에서 '국내 공급사'로 체크한 곳)
+  const isDomestic = (r: any) => !!Number(locByKey.get(normKey(r.supplier))?.domestic);
+  const originOk = (r: any) => !origin || (origin === "domestic" ? isDomestic(r) : !isDomestic(r));
+
   // 기간(연도) 필터를 뺀 나머지 조건 — 월별 그래프는 계약일이 아니라 ETA로 달을 나누기 때문에 따로 쓴다
   const rowsAllYears = useMemo(() => (imports || []).filter((r) => {
+    if (!originOk(r)) return false;
     if (material && r.material_name !== material) return false;
     if (stage === "transit" && !IN_TRANSIT.has(r.status)) return false;
     if (stage === "contracted" && r.status !== "contracted") return false;
     if (stage === "after" && (r.status === "contracted" || IN_TRANSIT.has(r.status))) return false;
     return true;
-  }), [imports, material, stage]);
+  }), [imports, material, stage, origin, locByKey]);
 
   const rows = useMemo(() => (imports || []).filter((r) => {
     if (year && !String(r.contract_date || "").startsWith(year)) return false;
+    if (!originOk(r)) return false;
     if (material && r.material_name !== material) return false;
     if (stage === "transit" && !IN_TRANSIT.has(r.status)) return false;
     if (stage === "contracted" && r.status !== "contracted") return false;
     if (stage === "after" && (r.status === "contracted" || IN_TRANSIT.has(r.status))) return false;
     return true;
-  }), [imports, year, material, stage]);
+  }), [imports, year, material, stage, origin, locByKey]);
 
   // 위치별(같은 항구에 여러 공급사가 있을 수 있음)로 묶기
   const groups = useMemo(() => {
@@ -159,7 +168,7 @@ export default function ImportMap() {
       const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
       let g = m.get(key);
       if (!g) {
-        g = { key, lat: Number(loc.lat), lng: wrapLng(Number(loc.lng)), country: loc.country || "", region: loc.region || "", suppliers: [], rows: [], qty: 0, transit: 0 };
+        g = { key, lat: Number(loc.lat), lng: wrapLng(Number(loc.lng)), country: loc.country || "", region: loc.region || "", suppliers: [], rows: [], qty: 0, transit: 0, domestic: !!Number(loc.domestic) };
         m.set(key, g);
       }
       if (!g.suppliers.includes(loc.supplier)) g.suppliers.push(loc.supplier);
@@ -189,12 +198,15 @@ export default function ImportMap() {
   const kpi = useMemo(() => {
     const countries = new Set<string>();
     const suppliers = new Set<string>();
+    let domCount = 0, domQty = 0;
     for (const r of rows) {
       if (r.supplier) suppliers.add(normKey(r.supplier));
       const loc = locByKey.get(normKey(r.supplier));
+      if (loc && Number(loc.domestic)) { domCount++; domQty += Number(r.quantity) || 0; continue; }
       if (loc?.country) countries.add(loc.country);
     }
     return {
+      domCount, domQty,
       count: rows.length,
       qty: rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0),
       money: sumByCurrency(rows),
@@ -207,7 +219,7 @@ export default function ImportMap() {
   const byCountry = useMemo(() => {
     const m = new Map<string, { country: string; qty: number; count: number; keys: Set<string> }>();
     for (const g of groups) {
-      const c = g.country || "기타";
+      const c = g.domestic ? "대한민국 (국내 매입)" : g.country || "기타";
       const e = m.get(c) || { country: c, qty: 0, count: 0, keys: new Set<string>() };
       e.qty += g.qty;
       e.count += g.rows.length;
@@ -226,7 +238,7 @@ export default function ImportMap() {
       const e = m.get(k) || {
         supplier: loc?.supplier || r.supplier.trim(), qty: 0, count: 0,
         key: loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null,
-        place: loc ? [loc.country, loc.region].filter(Boolean).join(" · ") : "위치 미등록",
+        place: loc ? (Number(loc.domestic) ? `국내 · ${loc.region || loc.country || ""}` : [loc.country, loc.region].filter(Boolean).join(" · ")) : "위치 미등록",
       };
       e.qty += Number(r.quantity) || 0;
       e.count++;
@@ -255,6 +267,11 @@ export default function ImportMap() {
 
       {/* 필터 */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <select className="input w-auto py-1.5 text-sm" value={origin} onChange={(e) => setOrigin(e.target.value)}>
+          <option value="">구분: 해외 + 국내</option>
+          <option value="overseas">해외 수입만</option>
+          <option value="domestic">국내 매입만</option>
+        </select>
         <select className="input w-auto py-1.5 text-sm" value={year} onChange={(e) => setYear(e.target.value)}>
           <option value="">기간: 전체</option>
           {years.map((y) => <option key={y} value={y}>{y}년 계약</option>)}
@@ -269,18 +286,20 @@ export default function ImportMap() {
           <option value="">원료: 전체</option>
           {materials.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        {(year || stage || material) && (
-          <button className="text-xs text-slate-500 underline" onClick={() => { setYear(""); setStage(""); setMaterial(""); }}>필터 초기화</button>
+        {(year || stage || material || origin) && (
+          <button className="text-xs text-slate-500 underline" onClick={() => { setYear(""); setStage(""); setMaterial(""); setOrigin(""); }}>필터 초기화</button>
         )}
       </div>
 
       {/* 현황판 숫자 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="수입 건수" value={`${kpi.count.toLocaleString()}건`} />
-        <Kpi label="총 물량" value={`${fmtNum(kpi.qty)} MT`} />
+        <Kpi label="전체 건수" value={`${kpi.count.toLocaleString()}건`}
+          sub={kpi.domCount ? `해외 수입 ${kpi.count - kpi.domCount}건 · 국내 매입 ${kpi.domCount}건` : undefined} />
+        <Kpi label="총 물량" value={`${fmtNum(kpi.qty)} MT`}
+          sub={kpi.domCount ? `해외 ${fmtNum(kpi.qty - kpi.domQty)} · 국내 ${fmtNum(kpi.domQty)} MT` : undefined} />
         <Kpi label="총 금액" value={kpi.money.length ? `${kpi.money[0][0]} ${fmtNum(kpi.money[0][1])}` : "-"}
           sub={kpi.money.slice(1).map(([c, v]) => `${c} ${fmtNum(v)}`).join(" · ") || undefined} />
-        <Kpi label="공급 국가" value={`${kpi.countries}개국`} />
+        <Kpi label="해외 공급 국가" value={`${kpi.countries}개국`} />
         <Kpi label="공급사" value={`${kpi.suppliers}곳`} />
         <Kpi label="이동 중 (선적~통관)" value={`${kpi.transit}건`} accent={kpi.transit > 0} />
       </div>
@@ -433,6 +452,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
 
     // 1) 항로 곡선 (선택된 위치는 진하게, 나머지는 옅게)
     for (const g of groups) {
+      if (g.domestic) continue; // 국내 공급사는 바다 항로가 없으니 선을 그리지 않는다
       const sel = selectedKey === g.key;
       const transit = g.transit > 0;
       L.polyline(curvePoints([g.lat, g.lng], destPt), {
@@ -445,11 +465,6 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
       }).addTo(layer);
     }
 
-    // 2) 한국 도착항
-    L.circleMarker(destPt, { radius: 7, color: "#fff", weight: 2, fillColor: COLOR_DEST, fillOpacity: 1 })
-      .bindTooltip(`<b>${esc(dest.name)}</b> (도착항)`, { permanent: true, direction: "right", offset: [8, 0], className: "orca-map-label" })
-      .addTo(layer);
-
     // 3) 공급사 위치 원 (마우스 올리면 요약, 클릭하면 오른쪽에 상세)
     for (const g of groups) {
       const sel = selectedKey === g.key;
@@ -458,7 +473,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
       const place = [g.region, g.country].filter(Boolean).join(", ");
       const last = g.rows[0];
       const tip = `<div style="min-width:160px">
-        <div style="font-weight:700;color:#001629">${g.suppliers.map(esc).join(", ")}</div>
+        <div style="font-weight:700;color:#001629">${g.suppliers.map(esc).join(", ")}${g.domestic ? ` <span style="color:${COLOR_DOMESTIC};font-size:11px">국내</span>` : ""}</div>
         <div style="color:#64748b;font-size:11px">${esc(place)}</div>
         <div style="margin-top:4px;font-size:12px">${g.rows.length}건 · <b>${fmtNum(g.qty)} MT</b>${transit ? ` · <span style="color:${COLOR_TRANSIT};font-weight:700">이동 중 ${g.transit}건</span>` : ""}</div>
         ${last ? `<div style="color:#64748b;font-size:11px">최근: ${esc(fmtDate(last.contract_date))} ${esc(last.material_name)}</div>` : ""}
@@ -468,7 +483,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
         radius: r,
         color: sel ? COLOR_DEST : "#fff",
         weight: sel ? 3 : 2,
-        fillColor: transit ? COLOR_TRANSIT : COLOR_DONE,
+        fillColor: g.domestic ? COLOR_DOMESTIC : transit ? COLOR_TRANSIT : COLOR_DONE,
         fillOpacity: selectedKey && !sel ? 0.45 : 0.88,
         bubblingMouseEvents: false,
       })
@@ -476,6 +491,11 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
         .on("click", () => onSelectRef.current(g.key))
         .addTo(layer);
     }
+
+    // 4) 한국 도착항 (국내 공급사 점에 가리지 않도록 맨 위에)
+    L.circleMarker(destPt, { radius: 7, color: "#fff", weight: 2, fillColor: COLOR_DEST, fillOpacity: 1, interactive: false })
+      .bindTooltip(`<b>${esc(dest.name)}</b> (도착항)`, { permanent: true, direction: "right", offset: [8, 0], className: "orca-map-label" })
+      .addTo(layer);
 
     if (!fittedRef.current && groups.length > 0) {
       fittedRef.current = true;
@@ -503,6 +523,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
       <div className="absolute bottom-3 left-3 z-[1000] rounded-lg bg-white/95 px-3 py-2 text-[11px] text-slate-600 shadow">
         <div className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_TRANSIT }} /> 이동 중인 건 있음 (선적~통관)</div>
         <div className="mt-1 flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_DONE }} /> 계약 / 도착 이후</div>
+        <div className="mt-1 flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_DOMESTIC }} /> 국내 공급사 (항로 없음)</div>
         <div className="mt-1 flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_DEST }} /> 한국 도착항</div>
         <div className="mt-1 text-slate-400">원 크기 · 선 굵기 = 물량</div>
       </div>
@@ -542,7 +563,7 @@ function Overview({ byCountry, bySupplier, onCountry, onSupplier }: {
               <span className="text-slate-500">{fmtNum(c.qty)} MT · {c.count}건</span>
             </div>
             <div className="mt-1 h-2 w-full rounded bg-slate-100">
-              <div className="h-2 rounded" style={{ width: `${Math.max(2, (c.qty / maxC) * 100)}%`, background: COLOR_DONE }} />
+              <div className="h-2 rounded" style={{ width: `${Math.max(2, (c.qty / maxC) * 100)}%`, background: c.country.includes("국내") ? COLOR_DOMESTIC : COLOR_DONE }} />
             </div>
           </button>
         ))}
@@ -574,7 +595,10 @@ function LocationDetail({ g, onClose, onEdit }: { g: Group; onClose: () => void;
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1 text-[11px] text-slate-500"><Icon name="location_on" size={14} />{[g.country, g.region].filter(Boolean).join(" · ") || "위치"}</div>
-          <div className="text-base font-bold text-primary">{g.suppliers.join(", ")}</div>
+          <div className="text-base font-bold text-primary">
+            {g.suppliers.join(", ")}
+            {g.domestic && <span className="ml-1.5 rounded bg-teal-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-teal-700">국내 매입</span>}
+          </div>
         </div>
         <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" onClick={onClose} title="닫기 (전체 현황으로)">
           <Icon name="close" size={18} />
@@ -778,6 +802,7 @@ function LocationManager({ open, focus, onClose, imports, locs, dest, onSaved }:
       region: s.loc?.region || "",
       lat: s.loc?.lat ?? "",
       lng: s.loc?.lng ?? "",
+      domestic: !!Number(s.loc?.domestic),
       note: s.loc?.note || "",
     });
   }
@@ -846,7 +871,10 @@ function LocationManager({ open, focus, onClose, imports, locs, dest, onSaved }:
             <tbody>
               {suppliers.map((s) => (
                 <tr key={s.supplier} className="border-b border-slate-50">
-                  <td className="py-2 font-semibold text-slate-700">{s.supplier}</td>
+                  <td className="py-2 font-semibold text-slate-700">
+                    {s.supplier}
+                    {s.loc && Number(s.loc.domestic) ? <span className="ml-1.5 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700">국내</span> : null}
+                  </td>
                   <td className="py-2 text-xs">
                     {s.loc ? <span className="text-slate-600">{[s.loc.country, s.loc.region].filter(Boolean).join(" · ") || `${s.loc.lat}, ${s.loc.lng}`}</span>
                       : <span className="font-semibold text-amber-600">미등록</span>}
@@ -876,8 +904,20 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
   return (
     <div>
       <div className="mb-3 text-base font-bold text-primary">{value.supplier} <span className="text-sm font-normal text-slate-500">위치 지정</span></div>
+      <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2 text-sm">
+        <input type="checkbox" className="mt-0.5" checked={!!value.domestic}
+          onChange={(e) => onChange({
+            ...value,
+            domestic: e.target.checked,
+            country: e.target.checked ? "대한민국" : value.country === "대한민국" ? "" : value.country,
+          })} />
+        <span>
+          <span className="font-semibold text-teal-800">국내 공급사</span>
+          <span className="block text-xs text-slate-500">한국 안의 업체예요. 지도에 초록색 점으로 표시되고 바다 항로 선은 그리지 않아요. 아래 지도에서 업체(공장·창고) 위치를 클릭해 주세요.</span>
+        </span>
+      </label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-xs text-slate-500 sm:col-span-2">주요 항구에서 고르기
+        <label className={`text-xs text-slate-500 sm:col-span-2 ${value.domestic ? "hidden" : ""}`}>주요 항구에서 고르기
           <select className="input mt-1 text-sm" value={presetIdx >= 0 ? String(presetIdx) : ""}
             onChange={(e) => {
               const p = PORT_PRESETS[Number(e.target.value)];
@@ -894,15 +934,15 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
         <label className="text-xs text-slate-500">나라
           <input className="input mt-1 text-sm" value={value.country} onChange={(e) => set("country", e.target.value)} placeholder="예: 인도" />
         </label>
-        <label className="text-xs text-slate-500">지역 / 항구
-          <input className="input mt-1 text-sm" value={value.region} onChange={(e) => set("region", e.target.value)} placeholder="예: Mundra (문드라)" />
+        <label className="text-xs text-slate-500">{value.domestic ? "지역 (시·군)" : "지역 / 항구"}
+          <input className="input mt-1 text-sm" value={value.region} onChange={(e) => set("region", e.target.value)} placeholder={value.domestic ? "예: 충남 당진" : "예: Mundra (문드라)"} />
         </label>
       </div>
       <div className="mt-3 text-xs text-slate-500">
         지도를 클릭하면 그 위치로 지정돼요
         {value.lat !== "" && <span className="ml-2 text-slate-400">(현재: {Number(value.lat).toFixed(3)}, {Number(value.lng).toFixed(3)})</span>}
       </div>
-      <LocationPicker lat={value.lat === "" ? null : Number(value.lat)} lng={value.lng === "" ? null : Number(value.lng)}
+      <LocationPicker lat={value.lat === "" ? null : Number(value.lat)} lng={value.lng === "" ? null : Number(value.lng)} focusKorea={!!value.domestic}
         onPick={(lat, lng) => onChange({ ...value, lat: Number(lat.toFixed(4)), lng: Number(lng.toFixed(4)) })} />
       <div className="mt-4 flex justify-end gap-2">
         <button className="btn-secondary" onClick={onCancel}>목록으로</button>
@@ -912,7 +952,7 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
   );
 }
 
-function LocationPicker({ lat, lng, onPick }: { lat: number | null; lng: number | null; onPick: (lat: number, lng: number) => void }) {
+function LocationPicker({ lat, lng, onPick, focusKorea }: { lat: number | null; lng: number | null; onPick: (lat: number, lng: number) => void; focusKorea?: boolean }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.CircleMarker | null>(null);
@@ -921,7 +961,10 @@ function LocationPicker({ lat, lng, onPick }: { lat: number | null; lng: number 
 
   useEffect(() => {
     if (!elRef.current) return;
-    const map = L.map(elRef.current, { center: lat != null && lng != null ? [lat, wrapLng(lng)] : [20, 100], zoom: lat != null ? 5 : 2, minZoom: 2 });
+    const map = L.map(elRef.current, {
+      center: lat != null && lng != null ? [lat, wrapLng(lng)] : focusKorea ? [36.3, 127.8] : [20, 100],
+      zoom: lat != null ? (focusKorea ? 7 : 5) : focusKorea ? 7 : 2, minZoom: 2,
+    });
     makeBaseLayer().addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => {
       const p = e.latlng.wrap();
@@ -932,6 +975,12 @@ function LocationPicker({ lat, lng, onPick }: { lat: number | null; lng: number 
     const t = setTimeout(() => map.invalidateSize(), 150);
     return () => { clearTimeout(t); map.remove(); mapRef.current = null; markerRef.current = null; };
   }, []);
+
+  // '국내 공급사'로 체크하면 한국 지도로 바로 이동
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && focusKorea && !(lat != null && lng != null && lat > 33 && lat < 39 && lng > 124 && lng < 132)) map.setView([36.3, 127.8], 7);
+  }, [focusKorea]);
 
   useEffect(() => {
     const map = mapRef.current;
