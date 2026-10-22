@@ -548,9 +548,10 @@ function Overview({ byCountry, bySupplier, onCountry, onSupplier }: {
 }) {
   const maxC = Math.max(1, ...byCountry.map((c) => c.qty));
   return (
-    <div className="overflow-y-auto p-4">
-      <div className="mb-1 text-sm font-bold text-primary">국가별 수입 물량</div>
-      <div className="mb-3 text-[11px] text-slate-400">지도의 원에 마우스를 올리거나 클릭하면 상세 기록을 볼 수 있어요</div>
+    // 국가별(왼쪽) · 공급사별(오른쪽)을 한 줄에 나란히
+    <div className="grid flex-1 gap-x-6 gap-y-6 overflow-y-auto p-4 sm:grid-cols-2">
+      <div>
+      <div className="mb-3 text-sm font-bold text-primary">국가별 수입 물량</div>
       {byCountry.length === 0 && <div className="py-4 text-xs text-slate-400">위치가 등록된 공급사의 수입 건이 없습니다</div>}
       <div className="space-y-2">
         {byCountry.map((c) => (
@@ -565,8 +566,10 @@ function Overview({ byCountry, bySupplier, onCountry, onSupplier }: {
           </button>
         ))}
       </div>
+      </div>
 
-      <div className="mb-2 mt-6 text-sm font-bold text-primary">공급사별 수입 물량</div>
+      <div>
+      <div className="mb-2 text-sm font-bold text-primary">공급사별 수입 물량</div>
       <table className="w-full text-xs">
         <tbody>
           {bySupplier.map((s, i) => (
@@ -581,6 +584,7 @@ function Overview({ byCountry, bySupplier, onCountry, onSupplier }: {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
