@@ -7,33 +7,14 @@ import { Spinner, Modal, Icon, PageHeader } from "../components/ui";
 import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES } from "../ports";
 
 // ───────────────────────── 공용 도우미 ─────────────────────────
-// 배경지도: Esri 지도 (API 키 없이 사용) — 바다 / 일반 / 위성 중 골라 볼 수 있다
+// 배경지도: Esri 밝은 회색 지도 (API 키 없이 사용) — 군더더기 없이 깔끔해서 원과 항로 선이 잘 보인다
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 const ESRI_ATTR = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
-type BaseKey = "ocean" | "street" | "satellite";
-const BASEMAPS: Record<BaseKey, { label: string; layers: { url: string; native: number }[] }> = {
-  ocean: { label: "바다", layers: [
-    { url: `${ESRI}/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}`, native: 10 },
-    { url: `${ESRI}/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}`, native: 10 },
-  ] },
-  street: { label: "일반", layers: [
-    { url: `${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, native: 16 },
-  ] },
-  satellite: { label: "위성", layers: [
-    { url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, native: 16 },
-    { url: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, native: 16 },
-  ] },
-};
-function makeBaseLayer(k: BaseKey) {
-  return L.layerGroup(BASEMAPS[k].layers.map((l) => L.tileLayer(l.url, { attribution: ESRI_ATTR, maxNativeZoom: l.native, maxZoom: 14 })));
-}
-const BASE_PREF_KEY = "orca_import_map_base";
-function loadBasePref(): BaseKey {
-  try {
-    const v = localStorage.getItem(BASE_PREF_KEY);
-    if (v === "ocean" || v === "street" || v === "satellite") return v;
-  } catch { /* 저장소를 못 쓰는 환경이면 기본값 */ }
-  return "ocean";
+function makeBaseLayer() {
+  return L.layerGroup([
+    L.tileLayer(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { attribution: ESRI_ATTR, maxNativeZoom: 16, maxZoom: 14 }),
+    L.tileLayer(`${ESRI}/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxNativeZoom: 16, maxZoom: 14 }),
+  ]);
 }
 
 const COLOR_DONE = "#4059aa";    // 계약 / 도착 이후
@@ -418,23 +399,10 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
   groupsRef.current = groups;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
-  const [base, setBase] = useState<BaseKey>(loadBasePref);
-  const baseLayerRef = useRef<L.LayerGroup | null>(null);
-
-  // 배경지도 바꾸기 (선택은 이 브라우저에 기억해 둔다)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    baseLayerRef.current?.remove();
-    const layer = makeBaseLayer(base).addTo(map);
-    baseLayerRef.current = layer;
-    try { localStorage.setItem(BASE_PREF_KEY, base); } catch { /* 무시 */ }
-  }, [base]);
-
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
     const map = L.map(elRef.current, { center: [25, 115], zoom: 3, minZoom: 2, zoomControl: true, worldCopyJump: false });
-    baseLayerRef.current = makeBaseLayer(base).addTo(map);
+    makeBaseLayer().addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     map.on("click", () => onSelectRef.current(null));
     mapRef.current = map;
@@ -534,20 +502,10 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
         <div className="mt-1 flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_DEST }} /> 한국 도착항</div>
         <div className="mt-1 text-slate-400">원 크기 · 선 굵기 = 물량</div>
       </div>
-      <div className="absolute right-3 top-3 z-[1000] flex items-center gap-2">
-        <button className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow hover:bg-slate-50"
-          onClick={() => { onSelect(null); fitTo(); }}>
-          전체 보기
-        </button>
-        <div className="flex overflow-hidden rounded-md bg-white text-xs font-semibold shadow">
-          {(Object.keys(BASEMAPS) as BaseKey[]).map((k) => (
-            <button key={k} onClick={() => setBase(k)}
-              className={`px-2.5 py-1 ${base === k ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-50"}`}>
-              {BASEMAPS[k].label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <button className="absolute right-3 top-3 z-[1000] rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow hover:bg-slate-50"
+        onClick={() => { onSelect(null); fitTo(); }}>
+        전체 보기
+      </button>
       {groups.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-[1000] flex items-center justify-center">
           <div className="rounded-lg bg-white/95 px-4 py-3 text-center text-sm text-slate-500 shadow">
@@ -898,7 +856,7 @@ function LocationPicker({ lat, lng, onPick }: { lat: number | null; lng: number 
   useEffect(() => {
     if (!elRef.current) return;
     const map = L.map(elRef.current, { center: lat != null && lng != null ? [lat, wrapLng(lng)] : [20, 100], zoom: lat != null ? 5 : 2, minZoom: 2 });
-    makeBaseLayer("street").addTo(map);
+    makeBaseLayer().addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => {
       const p = e.latlng.wrap();
       onPickRef.current(p.lat, p.lng);
