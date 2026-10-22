@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_LABEL } from "./auth";
 import { Spinner, Icon } from "./components/ui";
 import Login from "./pages/Login";
@@ -26,14 +26,19 @@ import CalcSettings from "./pages/CalcSettings";
 const ImportMap = lazy(() => import("./pages/ImportMap"));
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
-const NAV: { group: string; items: NavItem[] }[] = [
+// 자주 쓰는 메뉴는 항상 위에, 나머지는 "더보기"에 접어둔다 (삭제가 아니라 펼치면 그대로 사용)
+const MAIN_NAV: NavItem[] = [
+  { to: "/", label: "대시보드", icon: "dashboard" },
+  { to: "/imports", label: "원료 수입현황", icon: "sailing" },
+  { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
+  { to: "/trip-reports", label: "출장결과보고", icon: "flight_takeoff" },
+];
+const MORE_NAV: { group: string; items: NavItem[] }[] = [
   { group: "Workspace", items: [
-    { to: "/", label: "대시보드", icon: "dashboard" },
     { to: "/tasks", label: "업무 / 할일", icon: "task_alt" },
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
     { to: "/approvals", label: "전자결재", icon: "approval" },
-    { to: "/trip-reports", label: "출장결과보고", icon: "flight_takeoff" },
     { to: "/weekly", label: "주간결산 보고", icon: "event_note" },
   ]},
   { group: "Communication", items: [
@@ -42,8 +47,6 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/drive", label: "파일함", icon: "folder_shared" },
   ]},
   { group: "Trade & Logistics", items: [
-    { to: "/imports", label: "원료 수입현황", icon: "sailing" },
-    { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
     { to: "/exports", label: "원료 수출현황", icon: "local_shipping" },
     { to: "/inventory", label: "재고관리", icon: "inventory_2" },
     { to: "/materials", label: "원료 / 분석결과", icon: "science" },
@@ -54,9 +57,31 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/users", label: "직원관리", icon: "groups", roles: ["admin"] },
   ]},
 ];
+const MORE_OPEN_KEY = "orca_nav_more_open";
+
+function NavItemLink({ i, onClose }: { i: NavItem; onClose: () => void }) {
+  return (
+    <NavLink to={i.to} end={i.to === "/"} onClick={onClose}
+      className={({ isActive }) => `flex items-center gap-4 px-4 py-2.5 transition-all duration-150 ${isActive ? "bg-secondary-container font-bold text-on-secondary-container" : "text-on-surface-variant hover:bg-surface-container-highest"}`}>
+      <Icon name={i.icon} size={22} />
+      <span className="mono-label">{i.label}</span>
+    </NavLink>
+  );
+}
 
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const inMore = MORE_NAV.some((g) => g.items.some((i) => location.pathname.startsWith(i.to)));
+  const [moreOpen, setMoreOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem(MORE_OPEN_KEY) === "1"; } catch { return false; }
+  });
+  const showMore = moreOpen || inMore; // 더보기 안의 메뉴를 보고 있으면 자동으로 펼쳐 둔다
+  function toggleMore() {
+    const next = !showMore;
+    setMoreOpen(next);
+    try { localStorage.setItem(MORE_OPEN_KEY, next ? "1" : "0"); } catch { /* 무시 */ }
+  }
   return (
     <>
       {open && <div className="fixed inset-0 z-40 bg-primary/30 md:hidden" onClick={onClose} />}
@@ -67,18 +92,30 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           </NavLink>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-2 scrollbar-hide">
-          {NAV.map((g) => (
-            <div key={g.group}>
-              <div className="px-4 pb-1 mono-label text-on-surface-variant opacity-60">{g.group}</div>
-              {g.items.filter((i) => !i.roles || i.roles.includes(user!.role)).map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === "/"} onClick={onClose}
-                  className={({ isActive }) => `flex items-center gap-4 px-4 py-2.5 transition-all duration-150 ${isActive ? "bg-secondary-container font-bold text-on-secondary-container" : "text-on-surface-variant hover:bg-surface-container-highest"}`}>
-                  <Icon name={i.icon} size={22} />
-                  <span className="mono-label">{i.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
+          <div>
+            {MAIN_NAV.map((i) => <NavItemLink key={i.to} i={i} onClose={onClose} />)}
+          </div>
+          <div className="border-t border-outline-variant pt-2">
+            <button type="button" onClick={toggleMore}
+              className="flex w-full items-center gap-4 px-4 py-2 text-on-surface-variant hover:bg-surface-container-highest">
+              <Icon name={showMore ? "expand_less" : "expand_more"} size={22} />
+              <span className="mono-label">{showMore ? "접기" : "더보기"}</span>
+            </button>
+            {showMore && (
+              <div className="mt-2 space-y-4">
+                {MORE_NAV.map((g) => {
+                  const items = g.items.filter((i) => !i.roles || i.roles.includes(user!.role));
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={g.group}>
+                      <div className="px-4 pb-1 mono-label text-on-surface-variant opacity-60">{g.group}</div>
+                      {items.map((i) => <NavItemLink key={i.to} i={i} onClose={onClose} />)}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
         <div className="mt-auto border-t border-outline-variant p-4">
           <div className="flex items-center gap-3">

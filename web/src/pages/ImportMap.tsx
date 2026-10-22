@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../api";
@@ -99,6 +99,27 @@ interface Group {
   domestic: boolean;
 }
 
+// 수입 건들을 공급사 위치(같은 좌표)별로 묶는다
+function computeGroups(rows: any[], locByKey: Map<string, any>): Group[] {
+  const m = new Map<string, Group>();
+  for (const r of rows) {
+    const loc = locByKey.get(normKey(r.supplier));
+    if (!loc) continue;
+    const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
+    let g = m.get(key);
+    if (!g) {
+      g = { key, lat: Number(loc.lat), lng: wrapLng(Number(loc.lng)), country: loc.country || "", region: loc.region || "", suppliers: [], rows: [], qty: 0, transit: 0, domestic: !!Number(loc.domestic) };
+      m.set(key, g);
+    }
+    if (!g.suppliers.includes(loc.supplier)) g.suppliers.push(loc.supplier);
+    g.rows.push(r);
+    g.qty += Number(r.quantity) || 0;
+    if (IN_TRANSIT.has(r.status)) g.transit++;
+  }
+  for (const g of m.values()) g.rows.sort((a, b) => String(b.contract_date || "").localeCompare(String(a.contract_date || "")));
+  return Array.from(m.values()).sort((a, b) => b.qty - a.qty);
+}
+
 // ───────────────────────── 페이지 ─────────────────────────
 export default function ImportMap() {
   const [imports, setImports] = useState<any[] | null>(null);
@@ -161,25 +182,7 @@ export default function ImportMap() {
   }), [imports, year, material, stage, origin, locByKey]);
 
   // 위치별(같은 항구에 여러 공급사가 있을 수 있음)로 묶기
-  const groups = useMemo(() => {
-    const m = new Map<string, Group>();
-    for (const r of rows) {
-      const loc = locByKey.get(normKey(r.supplier));
-      if (!loc) continue;
-      const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
-      let g = m.get(key);
-      if (!g) {
-        g = { key, lat: Number(loc.lat), lng: wrapLng(Number(loc.lng)), country: loc.country || "", region: loc.region || "", suppliers: [], rows: [], qty: 0, transit: 0, domestic: !!Number(loc.domestic) };
-        m.set(key, g);
-      }
-      if (!g.suppliers.includes(loc.supplier)) g.suppliers.push(loc.supplier);
-      g.rows.push(r);
-      g.qty += Number(r.quantity) || 0;
-      if (IN_TRANSIT.has(r.status)) g.transit++;
-    }
-    for (const g of m.values()) g.rows.sort((a, b) => String(b.contract_date || "").localeCompare(String(a.contract_date || "")));
-    return Array.from(m.values()).sort((a, b) => b.qty - a.qty);
-  }, [rows, locByKey]);
+  const groups = useMemo(() => computeGroups(rows, locByKey), [rows, locByKey]);
 
   const unlocated = useMemo(() => {
     const s = new Map<string, number>();
@@ -216,6 +219,22 @@ export default function ImportMap() {
       transit: rows.filter((r) => IN_TRANSIT.has(r.status)).length,
     };
   }, [rows, locByKey]);
+
+  // 이번 달 도착분 (ETA 기준) — 예: ETA 10-24 인 건은 10월 도착
+  const thisMonth = useMemo(() => {
+    const d = new Date();
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const rs = rowsAllYears.filter((r) => String(r.eta || "").startsWith(ym));
+    const dom = rs.filter((r) => isDomestic(r));
+    return {
+      month: d.getMonth() + 1,
+      count: rs.length,
+      qty: rs.reduce((a, r) => a + (Number(r.quantity) || 0), 0),
+      money: sumByCurrency(rs),
+      domCount: dom.length,
+      domQty: dom.reduce((a, r) => a + (Number(r.quantity) || 0), 0),
+    };
+  }, [rowsAllYears, locByKey]);
 
   const byCountry = useMemo(() => {
     const m = new Map<string, { country: string; qty: number; count: number; keys: Set<string> }>();
@@ -294,12 +313,12 @@ export default function ImportMap() {
 
       {/* 현황판 숫자 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="전체 건수" value={`${kpi.count.toLocaleString()}건`}
-          sub={kpi.domCount ? `해외 수입 ${kpi.count - kpi.domCount}건 · 국내 매입 ${kpi.domCount}건` : undefined} />
-        <Kpi label="총 물량" value={`${fmtNum(kpi.qty)} MT`}
-          sub={kpi.domCount ? `해외 ${fmtNum(kpi.qty - kpi.domQty)} · 국내 ${fmtNum(kpi.domQty)} MT` : undefined} />
-        <Kpi label="총 금액" value={kpi.money.length ? `${kpi.money[0][0]} ${fmtNum(kpi.money[0][1])}` : "-"}
-          sub={kpi.money.slice(1).map(([c, v]) => `${c} ${fmtNum(v)}`).join(" · ") || undefined} />
+        <Kpi label={`${thisMonth.month}월 도착 건수 (ETA)`} value={`${thisMonth.count.toLocaleString()}건`}
+          sub={thisMonth.domCount ? `해외 ${thisMonth.count - thisMonth.domCount}건 · 국내 ${thisMonth.domCount}건` : undefined} />
+        <Kpi label={`${thisMonth.month}월 도착 물량 (ETA)`} value={`${fmtNum(thisMonth.qty)} MT`}
+          sub={thisMonth.domCount ? `해외 ${fmtNum(thisMonth.qty - thisMonth.domQty)} · 국내 ${fmtNum(thisMonth.domQty)} MT` : undefined} />
+        <Kpi label={`${thisMonth.month}월 도착 금액 (ETA)`} value={thisMonth.money.length ? `${thisMonth.money[0][0]} ${fmtNum(thisMonth.money[0][1])}` : "-"}
+          sub={thisMonth.money.slice(1).map(([c, v]) => `${c} ${fmtNum(v)}`).join(" · ") || undefined} />
         <Kpi label="해외 공급 국가" value={`${kpi.countries}개국`} />
         <Kpi label="공급사" value={`${kpi.suppliers}곳`} />
         <Kpi label="이동 중 (선적~통관)" value={`${kpi.transit}건`} accent={kpi.transit > 0} />
@@ -382,9 +401,10 @@ function StatusPill({ status }: { status: string }) {
 }
 
 // 지도: 공급사 위치 원(크기 = 물량) + 한국 도착항까지 곡선(굵기 = 물량)
-function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
+function WorldMap({ groups, dest, selectedKey, onSelect, apiRef, mini }: {
   groups: Group[]; dest: any; selectedKey: string | null; onSelect: (k: string | null) => void;
   apiRef: React.MutableRefObject<{ fitTo: (keys?: Set<string>) => void } | null>;
+  mini?: boolean; // 대시보드용 작은 지도 (범례·버튼 없이)
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -396,7 +416,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
   onSelectRef.current = onSelect;
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
-    const map = L.map(elRef.current, { center: [25, 115], zoom: 3, minZoom: 2, zoomControl: true, worldCopyJump: false });
+    const map = L.map(elRef.current, { center: [25, 115], zoom: 3, minZoom: 2, zoomControl: !mini, scrollWheelZoom: !mini, worldCopyJump: false });
     makeBaseLayer().addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     map.on("click", () => onSelectRef.current(null));
@@ -491,7 +511,8 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
         .orca-map-label { background: rgba(255,255,255,.92); border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 11px; padding: 2px 6px; }
         .orca-map-label::before { display: none; }
       `}</style>
-      <div ref={elRef} className="h-[420px] w-full sm:h-[600px]" />
+      <div ref={elRef} className={mini ? "h-[340px] w-full" : "h-[420px] w-full sm:h-[600px]"} />
+      {!mini && (<>
       <div className="absolute bottom-3 left-3 z-[1000] rounded-lg bg-white/95 px-3 py-2 text-[11px] text-slate-600 shadow">
         <div className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_TRANSIT }} /> 이동 중인 건 있음 (선적~통관)</div>
         <div className="mt-1 flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_DONE }} /> 계약 / 도착 이후</div>
@@ -503,7 +524,8 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
         onClick={() => { onSelect(null); fitTo(); }}>
         전체 보기
       </button>
-      {groups.length === 0 && (
+      </>)}
+      {groups.length === 0 && !mini && (
         <div className="pointer-events-none absolute inset-0 z-[1000] flex items-center justify-center">
           <div className="rounded-lg bg-white/95 px-4 py-3 text-center text-sm text-slate-500 shadow">
             지도에 표시할 건이 없습니다.<br />
@@ -1073,4 +1095,27 @@ function LocationPicker({ lat, lng, onPick, focusKorea, onCity }: {
       <div ref={elRef} className="h-72 w-full cursor-crosshair" />
     </div>
   );
+}
+
+// ───────────────────────── 대시보드용 미니 지도 ─────────────────────────
+// 수입 건을 공급사 위치에 찍어 보여주고, 원을 클릭하면 수입 지도 현황판으로 이동한다
+export function MiniImportMap() {
+  const navigate = useNavigate();
+  const [imports, setImports] = useState<any[] | null>(null);
+  const [locs, setLocs] = useState<any[]>([]);
+  const [dest, setDest] = useState<any>(null);
+  const apiRef = useRef<{ fitTo: (keys?: Set<string>) => void } | null>(null);
+  useEffect(() => {
+    api.get("/trade/imports").then((r) => setImports(r.items || []));
+    api.get("/geo/suppliers").then((r) => setLocs(r.items || []));
+    api.get("/geo/dest").then((r) => setDest(r.item));
+  }, []);
+  const locByKey = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const l of locs) m.set(l.supplier_key || normKey(l.supplier), l);
+    return m;
+  }, [locs]);
+  const groups = useMemo(() => computeGroups(imports || [], locByKey), [imports, locByKey]);
+  if (!imports || !dest) return <div className="flex h-[340px] items-center justify-center"><Spinner /></div>;
+  return <WorldMap mini groups={groups} dest={dest} selectedKey={null} apiRef={apiRef} onSelect={(k) => { if (k) navigate("/import-map"); }} />;
 }
