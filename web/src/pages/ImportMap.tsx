@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../api";
 import { Spinner, Modal, Icon, PageHeader, Badge } from "../components/ui";
-import { AttachmentPanel } from "./TradeModule";
+import { AttachmentPanel, QualityPanel, PriceCalcPanel } from "./TradeModule";
 import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES, KOREA_CITIES, KOREA_PROVINCES, koreaCityLabel, type KoreaCity } from "../ports";
 
 // ───────────────────────── 공용 도우미 ─────────────────────────
@@ -132,6 +132,8 @@ export default function ImportMap() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [managerFocus, setManagerFocus] = useState<string | null>(null);
+  // 월별 품목·선박 일정에서 한 건을 누르면 그 건의 정보와 서류를 보여준다 (원료 수입현황 펼침과 같은 내용)
+  const [detailRow, setDetailRow] = useState<any>(null);
 
   function loadAll() {
     api.get("/trade/imports").then((r) => setImports(r.items || []));
@@ -349,7 +351,7 @@ export default function ImportMap() {
           ) : (
             // 기본: 월별 수입 물량 + 이번 달 도착 품목 목록 (지도의 원을 누르면 그 위치 상세로 바뀜)
             <div className="overflow-y-auto p-4">
-              <MonthlyChart rows={rowsAllYears} year={year} locByKey={locByKey} onPick={(key) => setSelectedKey(key)} />
+              <MonthlyChart rows={rowsAllYears} year={year} locByKey={locByKey} onOpen={setDetailRow} />
             </div>
           )}
         </div>
@@ -367,13 +369,22 @@ export default function ImportMap() {
             }} />
         </div>
         <div className="card flex max-h-[420px] flex-col overflow-hidden">
-          <UpcomingShipments rows={rowsAllYears} locByKey={locByKey}
+          <UpcomingShipments rows={rowsAllYears} locByKey={locByKey} onOpen={setDetailRow}
             onPick={(key) => {
               setSelectedKey(key);
               document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
             }} />
         </div>
       </div>
+
+      {detailRow && (
+        <ImportDetailModal row={detailRow} loc={locByKey.get(normKey(detailRow.supplier)) || null} onClose={() => setDetailRow(null)}
+          onLocate={(key) => {
+            setDetailRow(null);
+            setSelectedKey(key);
+            document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }} />
+      )}
 
       <LocationManager open={managerOpen} focus={managerFocus} onClose={() => setManagerOpen(false)}
         imports={imports} locs={locs} dest={dest}
@@ -649,8 +660,9 @@ function LocationDetail({ g, onClose, onEdit }: { g: Group; onClose: () => void;
 }
 
 // 다가오는 선박 일정 — 대시보드와 같은 형식 (ETA가 오늘 이후인 수입 건, 도착 가까운 순)
-function UpcomingShipments({ rows, locByKey, onPick }: { rows: any[]; locByKey: Map<string, any>; onPick: (key: string) => void }) {
-  const [filesFor, setFilesFor] = useState<any>(null);
+function UpcomingShipments({ rows, locByKey, onPick, onOpen }: {
+  rows: any[]; locByKey: Map<string, any>; onPick: (key: string) => void; onOpen: (r: any) => void;
+}) {
   const d = new Date();
   const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const list = rows.filter((r) => r.eta && String(r.eta).slice(0, 10) >= todayStr)
@@ -675,7 +687,7 @@ function UpcomingShipments({ rows, locByKey, onPick }: { rows: any[]; locByKey: 
                 const loc = locByKey.get(normKey(r.supplier));
                 const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
                 return (
-                  <tr key={r.id} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setFilesFor(r)} title="클릭하면 첨부파일 보기">
+                  <tr key={r.id} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => onOpen(r)} title="클릭하면 이 건의 정보와 서류 보기">
                     <td className="td whitespace-nowrap"><Badge value={r.status} /></td>
                     <td className="td font-bold">{r.material_name}</td>
                     <td className="td text-xs">{r.supplier || "-"}</td>
@@ -697,23 +709,107 @@ function UpcomingShipments({ rows, locByKey, onPick }: { rows: any[]; locByKey: 
           </table>
         </div>
       )}
-      {filesFor && (
-        <Modal open={!!filesFor} onClose={() => setFilesFor(null)} title={`📎 ${filesFor.material_name} 첨부파일`} wide>
-          <p className="mb-3 text-xs text-on-surface-variant">수입 · {filesFor.supplier || "-"}</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <AttachmentPanel entityType="import" entityId={filesFor.id} category="contract" label="📄 계약서" />
-            <AttachmentPanel entityType="import" entityId={filesFor.id} category="shipping_docs" label="🚢 선적서류" />
-            <AttachmentPanel entityType="import" entityId={filesFor.id} category="settlement" label="💰 정산서류" />
-          </div>
-        </Modal>
-      )}
     </>
   );
 }
 
+// ───────────────────────── 수입 건 상세 (정보 + 서류) ─────────────────────────
+const STAGE_FLOW = [
+  { v: "contracted", l: "계약" }, { v: "shipped", l: "선적" }, { v: "customs", l: "통관" }, { v: "stored", l: "입고" },
+  { v: "processed", l: "가공" }, { v: "released", l: "출고" }, { v: "settled", l: "정산" },
+];
+const LEGACY_STAGE_IDX: Record<string, number> = { arrived: 1, cleared: 3, melt_in: 4, melt_out: 4, delivered: 6, done: 6 };
+
+function ImportDetailModal({ row: r, loc, onClose, onLocate }: { row: any; loc: any; onClose: () => void; onLocate: (key: string) => void }) {
+  const [panel, setPanel] = useState<"" | "quality" | "price">("");
+  const [qualityDraft, setQualityDraft] = useState<Record<string, string> | undefined>(undefined);
+  const stageIdx = (() => { const i = STAGE_FLOW.findIndex((x) => x.v === r.status); return i >= 0 ? i : LEGACY_STAGE_IDX[r.status] ?? 0; })();
+  const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
+  const place = loc ? (Number(loc.domestic) ? `국내 · ${loc.region || ""}` : [loc.country, loc.region].filter(Boolean).join(" · ")) : "위치 미등록";
+  const qty = r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-";
+  const amount = rowAmount(r);
+  const info: [string, any][] = [
+    ["계약일", fmtDate(r.contract_date)],
+    ["공급사(Seller)", r.supplier || "-"],
+    ["구매자(Buyer)", r.lc_bank || "-"],
+    ["물량", qty],
+    ["단가", r.unit_price != null ? `${r.currency || "USD"} ${fmtNum(Number(r.unit_price))}` : "-"],
+    ["총액", amount ? `${r.currency || "USD"} ${fmtNum(amount)}` : "-"],
+    ["거래조건 · 결제", [r.incoterms, r.payment_type].filter(Boolean).join(" · ") || "-"],
+    ["선박", r.vessel || "-"],
+    ["BL번호", r.bl_no || "-"],
+    ["ETD (출항)", fmtDate(r.etd)],
+    ["ETA (도착)", fmtDate(r.eta)],
+    ["LC번호", r.lc_no || "-"],
+  ];
+  return (
+    <Modal open onClose={onClose} title={`${r.material_name}`} wide="xl">
+      <div className="-mt-1 mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <StatusPill status={r.status} />
+        <span>{r.supplier || "-"} · {place}</span>
+      </div>
+
+      {/* 진행상황 */}
+      <div className="mb-4 flex flex-wrap items-center gap-1">
+        {STAGE_FLOW.map((st, i) => (
+          <Fragment key={st.v}>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${i === stageIdx ? "bg-primary text-white" : i < stageIdx ? "bg-secondary-fixed text-on-secondary-container" : "bg-slate-100 text-slate-400"}`}>{st.l}</span>
+            {i < STAGE_FLOW.length - 1 && <span className={`h-0.5 w-3 ${i < stageIdx ? "bg-secondary-fixed-dim" : "bg-slate-200"}`} />}
+          </Fragment>
+        ))}
+      </div>
+
+      {/* 기본 정보 */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 p-3 text-xs sm:grid-cols-4">
+        {info.map(([label, value]) => (
+          <div key={label}>
+            <div className="text-slate-400">{label}</div>
+            <div className="font-semibold text-slate-700">{value}</div>
+          </div>
+        ))}
+        {r.note && (
+          <div className="col-span-2 sm:col-span-4">
+            <div className="text-slate-400">메모</div>
+            <div className="whitespace-pre-wrap text-slate-700">{r.note}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setPanel((p) => (p === "quality" ? "" : "quality"))}
+          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${panel === "quality" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}>🧪 품질규격</button>
+        <button type="button" onClick={() => setPanel((p) => (p === "price" ? "" : "price"))}
+          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${panel === "price" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}>💰 원가계산</button>
+        <span className="ml-auto flex items-center gap-3 text-xs">
+          {key && <button className="font-semibold text-secondary hover:underline" onClick={() => onLocate(key)}>📍 지도에서 위치 보기</button>}
+          <Link to="/imports" className="font-semibold text-secondary hover:underline">원료 수입현황 열기 →</Link>
+        </span>
+      </div>
+      {panel === "quality" && (
+        <div className="mt-3">
+          <QualityPanel entityType="import" entityId={r.id} draft={qualityDraft} onDraftChange={setQualityDraft} />
+        </div>
+      )}
+      {panel === "price" && (
+        <div className="mt-3">
+          <PriceCalcPanel entityType="import" entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
+            defaultShipper={r.supplier} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft} />
+        </div>
+      )}
+
+      {/* 서류 */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <AttachmentPanel entityType="import" entityId={r.id} category="contract" label="📄 계약서" />
+        <AttachmentPanel entityType="import" entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
+        <AttachmentPanel entityType="import" entityId={r.id} category="settlement" label="💰 정산서류" />
+      </div>
+    </Modal>
+  );
+}
+
 // 월별 수입 물량 (ETA 도착 기준) — 예: ETD 9-26 / ETA 10-24 인 건은 10월 물량
-function MonthlyChart({ rows, year, locByKey, onPick }: {
-  rows: any[]; year: string; locByKey: Map<string, any>; onPick: (key: string) => void;
+function MonthlyChart({ rows, year, locByKey, onOpen }: {
+  rows: any[]; year: string; locByKey: Map<string, any>; onOpen: (r: any) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   // 막대를 클릭하면 그 달에 도착하는 건들을 아래에 상세하게 보여준다
@@ -809,11 +905,11 @@ function MonthlyChart({ rows, year, locByKey, onPick }: {
                 `${r.supplier || "-"} · ${place}`,
                 `ETD ${fmtDate(r.etd)} → ETA ${fmtDate(r.eta)}`,
                 r.unit_price != null ? `${r.currency || "USD"} ${fmtNum(Number(r.unit_price))}/MT` : "",
-                key ? "클릭하면 지도에서 위치 보기" : "",
+                "클릭하면 이 건의 정보와 서류 보기",
               ].filter(Boolean).join("\n");
               return (
-                <div key={r.id} title={tip} onClick={() => key && onPick(key)}
-                  className={`flex items-center gap-2 border-b border-slate-50 py-1.5 text-xs ${key ? "cursor-pointer hover:bg-brand-50" : ""}`}>
+                <div key={r.id} title={tip} onClick={() => onOpen(r)}
+                  className="flex cursor-pointer items-center gap-2 border-b border-slate-50 py-1.5 text-xs hover:bg-brand-50">
                   <span className="w-10 shrink-0 self-start pt-px font-mono text-[11px] text-slate-500">{String(r.eta).slice(5, 10)}</span>
                   <span className="min-w-0 flex-1 leading-tight">
                     <span className="block truncate font-semibold text-slate-800">{r.material_name}</span>

@@ -425,7 +425,7 @@ function CoaPanel({ entityType, entityId }: { entityType: string; entityId: numb
   );
 }
 
-function QualityPanel({ entityType, entityId, draft, onDraftChange }:
+export function QualityPanel({ entityType, entityId, draft, onDraftChange }:
   { entityType: string; entityId: number; draft?: Record<string, string>; onDraftChange?: (m: Record<string, string>) => void }) {
   const [history, setHistory] = useState<any[]>([]);
   // 같은 행의 원가계산 패널이 함께 열려 있을 때 끊김 없이 이어 쓸 수 있도록, 입력 중인 값은 draft로도 받아서 시작한다
@@ -598,7 +598,7 @@ function fmtWon(n: number) {
 
 // 💰 예상판가 빠른계산 — 쉬퍼 오퍼가를 입력하면 기준정보를 적용해 즉시 예상판가를 계산해서 보여주고,
 // 저장하면 이력으로 쌓인다. 품질규격 비교에서 저장된 AV/IV/S(황) 최신값을 자동으로 불러와 참고로 보여준다.
-function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms, defaultContractPrice, qualityDraft }:
+export function PriceCalcPanel({ entityType, entityId, defaultProduct, defaultQuantity, defaultShipper, defaultIncoterms, defaultContractPrice, qualityDraft }:
   { entityType: string; entityId: number; defaultProduct?: string; defaultQuantity?: number | null; defaultShipper?: string; defaultIncoterms?: string; defaultContractPrice?: number | null; qualityDraft?: Record<string, string> }) {
   const [settings, setSettings] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);

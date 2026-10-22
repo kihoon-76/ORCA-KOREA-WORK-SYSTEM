@@ -29,11 +29,11 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
-export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean | "xl" }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-primary/40 p-4 sm:p-8 backdrop-blur-sm" onClick={onClose}>
-      <div className={`card w-full ${wide ? "max-w-3xl" : "max-w-lg"} my-8 rounded-xl shadow-xl`} onClick={(e) => e.stopPropagation()}>
+      <div className={`card w-full ${wide === "xl" ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg"} my-8 rounded-xl shadow-xl`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-outline-variant px-5 py-4">
           <h2 className="headline font-bold text-primary">{title}</h2>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container">
