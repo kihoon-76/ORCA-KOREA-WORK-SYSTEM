@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_LABEL } from "./auth";
 import { Spinner, Icon } from "./components/ui";
@@ -22,6 +22,8 @@ import Chat from "./pages/Chat";
 import Meetings from "./pages/Meetings";
 import Drive from "./pages/Drive";
 import CalcSettings from "./pages/CalcSettings";
+// 지도 라이브러리(Leaflet)가 커서, 수입 지도 현황판을 열 때만 불러온다
+const ImportMap = lazy(() => import("./pages/ImportMap"));
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 const NAV: { group: string; items: NavItem[] }[] = [
@@ -41,6 +43,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   ]},
   { group: "Trade & Logistics", items: [
     { to: "/imports", label: "원료 수입현황", icon: "sailing" },
+    { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
     { to: "/exports", label: "원료 수출현황", icon: "local_shipping" },
     { to: "/inventory", label: "재고관리", icon: "inventory_2" },
     { to: "/materials", label: "원료 / 분석결과", icon: "science" },
@@ -169,6 +172,7 @@ export default function App() {
         <Route path="/meetings" element={<Meetings />} />
         <Route path="/drive" element={<Drive />} />
         <Route path="/imports" element={<Imports />} />
+        <Route path="/import-map" element={<Suspense fallback={<Spinner />}><ImportMap /></Suspense>} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/materials" element={<Materials />} />

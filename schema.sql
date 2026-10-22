@@ -343,3 +343,18 @@ CREATE TABLE IF NOT EXISTS price_calcs (
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_price_calcs_entity ON price_calcs(entity_type, entity_id, id DESC);
+
+-- ============ 수입 지도 현황판: 공급사 위치 ============
+-- 공급사별로 한 번만 위치(나라·지역/항구·좌표)를 등록하면, 그 공급사의 모든 수입 건이 지도에 표시된다.
+CREATE TABLE IF NOT EXISTS supplier_locations (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_key  TEXT NOT NULL UNIQUE,   -- 대문자·공백 정리한 공급사 이름 (매칭용)
+  supplier      TEXT NOT NULL,          -- 표시용 공급사 이름
+  country       TEXT,                   -- 나라
+  region        TEXT,                   -- 지역 / 항구 (예: Mundra, 샤먼항)
+  lat           REAL NOT NULL,
+  lng           REAL NOT NULL,
+  note          TEXT,
+  updated_by    INTEGER REFERENCES users(id),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);

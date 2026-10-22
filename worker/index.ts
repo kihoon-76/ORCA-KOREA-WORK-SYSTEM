@@ -16,6 +16,7 @@ import chatRoutes from "./routes/chat";
 import meetingsRoutes from "./routes/meetings";
 import driveRoutes from "./routes/drive";
 import calcRoutes from "./routes/calc";
+import geoRoutes from "./routes/geo";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -35,6 +36,7 @@ api.route("/chat", chatRoutes);
 api.route("/meetings", meetingsRoutes);
 api.route("/drive", driveRoutes);
 api.route("/calc", calcRoutes);
+api.route("/geo", geoRoutes);
 
 // 대시보드 요약
 api.get("/dashboard", authMiddleware, async (c) => {
