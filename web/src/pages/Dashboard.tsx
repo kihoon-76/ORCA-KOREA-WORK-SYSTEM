@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { Spinner, Icon, Badge, Modal } from "../components/ui";
 import { ApprovalCreateModal, ApprovalDetailModal, DOC_LABEL } from "./Approvals";
 import ShipCalendar from "../components/ShipCalendar";
+import FxCard from "../components/FxCard";
 
 // 수입 지도 미니 보기 — 지도 라이브러리가 커서 필요할 때만 불러온다
 const MiniImportMap = lazy(() => import("./ImportMap").then((m) => ({ default: m.MiniImportMap })));
@@ -99,6 +100,9 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {/* 환율 */}
+      <FxCard />
 
       {/* 선박 일정 캘린더 — ETD(출항)·ETA(도착)를 달력으로, 끌어서/클릭해서 날짜 수정 */}
       <div className="card overflow-hidden">
