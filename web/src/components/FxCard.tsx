@@ -101,6 +101,9 @@ export default function FxCard() {
             <div className="text-on-surface-variant">원가계산 기준환율</div>
             <div className="font-semibold text-primary">{baseRate != null ? baseRate.toLocaleString() : "-"}</div>
           </div>
+          <a href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer"
+            className="whitespace-nowrap rounded-md border border-outline-variant px-2.5 py-1 font-semibold text-secondary hover:bg-surface-container"
+            title="서울외국환중개 오늘의 환율(매매기준율)을 새 창으로 열어요">서울외국환중개 매매기준율 ↗</a>
           <button className="btn-secondary whitespace-nowrap px-2.5 py-1 text-xs disabled:opacity-50" disabled={applying} onClick={applyToSettings}>오늘 환율 적용</button>
           <button className="flex h-7 w-7 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container" title="새로고침" onClick={() => load(true)}>
             <Icon name="refresh" size={18} />
