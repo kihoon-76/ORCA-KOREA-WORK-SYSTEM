@@ -142,42 +142,48 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         </div>
       </div>
 
-      {/* 달력 */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className="grid grid-cols-7 border-b border-outline-variant bg-surface-container-low text-center text-xs font-semibold">
-            {WEEK.map((w, i) => <div key={w} className={`py-1.5 ${i === 0 ? "text-error" : i === 6 ? "text-secondary" : "text-on-surface-variant"}`}>{w}</div>)}
-          </div>
-          <div className="grid grid-cols-7">
-            {cells.map((d) => {
-              const key = ymd(d);
-              const inMonth = d.getMonth() === month.getMonth();
-              const events = byDate.get(key) || [];
-              const isToday = key === today;
-              return (
-                <div key={key}
-                  onDragOver={(ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; if (dragOver !== key) setDragOver(key); }}
-                  onDragLeave={() => setDragOver((k) => (k === key ? null : k))}
-                  onDrop={(ev) => { ev.preventDefault(); onDrop(key, ev.dataTransfer.getData("text/plain")); }}
-                  className={`min-h-[104px] border-b border-r border-outline-variant p-1 transition-colors ${inMonth ? "bg-surface-container-lowest" : "bg-surface-container-low/60"} ${dragOver === key ? "!bg-secondary-fixed/50 ring-2 ring-inset ring-secondary" : ""}`}>
-                  <div className="mb-0.5 flex items-center justify-between">
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-secondary font-bold text-white" : inMonth ? (d.getDay() === 0 ? "text-error" : "text-on-surface") : "text-on-surface-variant/50"}`}>
-                      {d.getDate()}
-                    </span>
+      {/* 달력(왼쪽) + 다가오는 선박 일정 목록(오른쪽) */}
+      <div className="flex flex-col xl:flex-row">
+        <div className="min-w-0 flex-1">
+        {/* 달력 */}
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px]">
+            <div className="grid grid-cols-7 border-b border-outline-variant bg-surface-container-low text-center text-xs font-semibold">
+              {WEEK.map((w, i) => <div key={w} className={`py-1.5 ${i === 0 ? "text-error" : i === 6 ? "text-secondary" : "text-on-surface-variant"}`}>{w}</div>)}
+            </div>
+            <div className="grid grid-cols-7">
+              {cells.map((d) => {
+                const key = ymd(d);
+                const inMonth = d.getMonth() === month.getMonth();
+                const events = byDate.get(key) || [];
+                const isToday = key === today;
+                return (
+                  <div key={key}
+                    onDragOver={(ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; if (dragOver !== key) setDragOver(key); }}
+                    onDragLeave={() => setDragOver((k) => (k === key ? null : k))}
+                    onDrop={(ev) => { ev.preventDefault(); onDrop(key, ev.dataTransfer.getData("text/plain")); }}
+                    className={`min-h-[104px] border-b border-r border-outline-variant p-1 transition-colors ${inMonth ? "bg-surface-container-lowest" : "bg-surface-container-low/60"} ${dragOver === key ? "!bg-secondary-fixed/50 ring-2 ring-inset ring-secondary" : ""}`}>
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-secondary font-bold text-white" : inMonth ? (d.getDay() === 0 ? "text-error" : "text-on-surface") : "text-on-surface-variant/50"}`}>
+                        {d.getDate()}
+                      </span>
+                    </div>
+                    {events.slice(0, MAX_PER_DAY).map(chip)}
+                    {events.length > MAX_PER_DAY && (
+                      <button className="w-full rounded px-1 text-left text-[11px] font-semibold text-secondary hover:bg-surface-container" onClick={() => setDayList(key)}>
+                        +{events.length - MAX_PER_DAY}건 더보기
+                      </button>
+                    )}
                   </div>
-                  {events.slice(0, MAX_PER_DAY).map(chip)}
-                  {events.length > MAX_PER_DAY && (
-                    <button className="w-full rounded px-1 text-left text-[11px] font-semibold text-secondary hover:bg-surface-container" onClick={() => setDayList(key)}>
-                      +{events.length - MAX_PER_DAY}건 더보기
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
+        <p className="px-6 py-2 text-[11px] text-on-surface-variant">일정을 클릭하면 날짜를 고치거나 서류를 볼 수 있고, 끌어서 다른 날짜에 놓으면 그 날짜로 바뀌어요.</p>
+        </div>
+        <UpcomingList imports={imports} today={today} onOpen={setEditing} />
       </div>
-      <p className="px-6 py-2 text-[11px] text-on-surface-variant">일정을 클릭하면 날짜를 고치거나 서류를 볼 수 있고, 끌어서 다른 날짜에 놓으면 그 날짜로 바뀌어요.</p>
 
       {/* 하루 일정 전체 */}
       {dayList && (
@@ -200,6 +206,50 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
     </div>
   );
 }
+
+// 다가오는 선박 일정 — 도착(ETA)이 오늘 이후인 건을 가까운 순서로 간단히
+function UpcomingList({ imports, today, onOpen }: { imports: any[]; today: string; onOpen: (r: any) => void }) {
+  const list = imports
+    .filter((r) => r.eta && String(r.eta).slice(0, 10) >= today)
+    .sort((a, b) => String(a.eta).localeCompare(String(b.eta)));
+  const t0 = new Date(today).getTime();
+  return (
+    <div className="flex flex-col border-t border-outline-variant xl:w-[320px] xl:border-l xl:border-t-0">
+      <div className="flex items-baseline justify-between px-4 py-3">
+        <span className="text-sm font-bold text-primary">다가오는 선박 일정</span>
+        <span className="text-xs text-on-surface-variant">{list.length}건</span>
+      </div>
+      {list.length === 0 && <p className="px-4 py-8 text-center text-xs text-on-surface-variant">예정된 도착 일정이 없습니다</p>}
+      <div className="max-h-[560px] flex-1 overflow-y-auto">
+        {list.map((r) => {
+          const days = Math.round((new Date(String(r.eta).slice(0, 10)).getTime() - t0) / 86400000);
+          return (
+            <button key={r.id} onClick={() => onOpen(r)} title="클릭: 날짜 수정·서류 보기"
+              className="flex w-full items-center gap-3 border-t border-outline-variant/60 px-4 py-2 text-left hover:bg-surface-container-low">
+              <div className="w-[52px] shrink-0 text-center">
+                <div className="font-mono text-xs font-bold text-primary">{md(r.eta).slice(0, 5)}</div>
+                <div className={`text-[11px] font-semibold ${days <= 3 ? "text-amber-700" : "text-on-surface-variant"}`}>{days === 0 ? "오늘" : `D-${days}`}</div>
+              </div>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="truncate text-sm font-semibold text-on-surface">{r.material_name}</div>
+                <div className="truncate text-[11px] text-on-surface-variant">{r.supplier || "-"}</div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-xs font-semibold text-on-surface">{r.quantity != null ? `${Number(r.quantity).toLocaleString()} ${r.unit || "MT"}` : "-"}</div>
+                <div className="text-[11px] text-on-surface-variant">{STATUS_TEXT[r.status] || r.status || ""}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const STATUS_TEXT: Record<string, string> = {
+  contracted: "계약", shipped: "선적", customs: "통관", stored: "입고", processed: "가공", released: "출고", settled: "정산",
+  arrived: "도착", cleared: "통관완료", delivered: "출고", done: "완료",
+};
 
 // 일정 클릭 → ETD/ETA 날짜 바로 고치기 + 서류 보기
 function EditShipModal({ row, onClose, onSave }: { row: any; onClose: () => void; onSave: (row: any, patch: Partial<Record<Field, string | null>>) => Promise<boolean> }) {
