@@ -347,19 +347,22 @@ export default function ImportMap() {
           {selected ? (
             <LocationDetail g={selected} onClose={() => setSelectedKey(null)} onEdit={(s) => openManager(s)} />
           ) : (
-            <Overview byCountry={byCountry} bySupplier={bySupplier}
-              onCountry={(keys) => mapApi.current?.fitTo(keys)}
-              onSupplier={(s) => (s.key ? setSelectedKey(s.key) : openManager(s.supplier))} />
+            // 기본: 월별 수입 물량 + 이번 달 도착 품목 목록 (지도의 원을 누르면 그 위치 상세로 바뀜)
+            <div className="overflow-y-auto p-4">
+              <MonthlyChart rows={rowsAllYears} year={year} locByKey={locByKey} onPick={(key) => setSelectedKey(key)} />
+            </div>
           )}
         </div>
       </div>
 
-      {/* 월별 물량 + 다가오는 선박 일정 */}
+      {/* 국가별·공급사별 수입 물량 + 다가오는 선박 일정 */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card p-4">
-          <MonthlyChart rows={rowsAllYears} year={year} locByKey={locByKey}
-            onPick={(key) => {
-              setSelectedKey(key);
+        <div className="card flex max-h-[420px] flex-col overflow-hidden">
+          <Overview byCountry={byCountry} bySupplier={bySupplier}
+            onCountry={(keys) => { mapApi.current?.fitTo(keys); document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            onSupplier={(s) => {
+              if (!s.key) { openManager(s.supplier); return; }
+              setSelectedKey(s.key);
               document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
             }} />
         </div>
@@ -710,9 +713,10 @@ function MonthlyChart({ rows, year, locByKey, onPick }: {
 }) {
   const [hover, setHover] = useState<number | null>(null);
   // 막대를 클릭하면 그 달에 도착하는 건들을 아래에 상세하게 보여준다
-  const [picked, setPicked] = useState<string | null>(null);
   const now = new Date();
   const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // 처음에는 이번 달 도착 품목을 바로 보여준다
+  const [picked, setPicked] = useState<string | null>(curYm);
   const noEta = rows.filter((r) => !r.eta);
   const noEtaQty = noEta.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
   const months = useMemo(() => {
@@ -742,13 +746,13 @@ function MonthlyChart({ rows, year, locByKey, onPick }: {
         <div className="text-sm font-bold text-primary">월별 수입 물량 <span className="text-xs font-normal text-slate-400">(ETA 도착 기준{year ? `, ${year}년` : ""})</span></div>
         <div className="text-xs text-slate-500">합계 {fmtNum(total)} MT</div>
       </div>
-      <div className="relative mt-4 flex h-44 items-end gap-[2px] border-b border-slate-200">
+      <div className="relative mt-4 flex h-36 items-end gap-[2px] border-b border-slate-200">
         <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-slate-100" />
         <div className="pointer-events-none absolute -top-4 right-0 text-[10px] text-slate-400">{fmtNum(max)} MT</div>
         {months.map((m, i) => (
           <div key={m.ym} className={`relative flex h-full flex-1 items-end justify-center ${m.count ? "cursor-pointer" : ""}`}
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
-            onClick={() => m.count && setPicked((p) => (p === m.ym ? null : m.ym))}>
+            onClick={() => (m.count || m.ym === curYm) && setPicked((p) => (p === m.ym ? null : m.ym))}>
             <div className="w-full max-w-[28px] rounded-t transition-opacity"
               style={{
                 height: `${(m.qty / max) * 100}%`, minHeight: m.qty > 0 ? 2 : 0,
@@ -778,51 +782,44 @@ function MonthlyChart({ rows, year, locByKey, onPick }: {
 
       {pickedMonth && (
         <div className="mt-3 rounded-lg border border-slate-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+          <div className="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
             <div className="text-xs">
-              <span className="font-bold text-primary">{pickedMonth.ym.replace("-", "년 ")}월 {pickedMonth.ym > curYm ? "도착 예정" : "도착"}</span>
-              <span className="ml-2 text-slate-500">{pickedMonth.count}건 · {fmtNum(pickedMonth.qty)} MT · {moneyText(pickedMonth.rows)}</span>
+              <div className="font-bold text-primary">{pickedMonth.ym.replace("-", "년 ")}월 {pickedMonth.ym > curYm ? "도착 예정" : "도착"} 품목</div>
+              <div className="text-slate-500">{pickedMonth.count}건 · {fmtNum(pickedMonth.qty)} MT · {moneyText(pickedMonth.rows)}</div>
             </div>
-            <button className="flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200" onClick={() => setPicked(null)} title="닫기">
+            <button className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200" onClick={() => setPicked(null)} title="닫기">
               <Icon name="close" size={16} />
             </button>
           </div>
-          <div className="max-h-64 overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-white text-slate-500">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-semibold">ETA</th>
-                  <th className="px-2 py-1.5 text-left font-semibold">원료 · 공급사</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">물량</th>
-                  <th className="px-3 py-1.5 text-left font-semibold">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pickedMonth.rows.map((r: any) => {
-                  const loc = locByKey.get(normKey(r.supplier));
-                  const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
-                  return (
-                    <tr key={r.id} className={`border-t border-slate-50 align-top ${key ? "cursor-pointer hover:bg-brand-50" : ""}`}
-                      onClick={() => key && onPick(key)} title={key ? "클릭하면 지도에서 위치 보기" : undefined}>
-                      <td className="whitespace-nowrap px-3 py-1.5 font-semibold text-slate-700">{fmtDate(r.eta)}</td>
-                      <td className="px-2 py-1.5">
-                        <div className="font-semibold text-slate-700">{r.material_name}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {r.supplier || "-"}
-                          <span className="text-slate-400">{loc ? ` · ${[loc.country, loc.region].filter(Boolean).join(" ")}` : " · 위치 미등록"}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          계약 {fmtDate(r.contract_date)} · ETD {fmtDate(r.etd)}
-                          {r.unit_price != null && ` · ${r.currency || "USD"} ${fmtNum(Number(r.unit_price))}/MT`}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-slate-700">{r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-"}</td>
-                      <td className="px-3 py-1.5"><StatusPill status={r.status} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {pickedMonth.count === 0 && <div className="py-6 text-center text-xs text-slate-400">이 달에 도착하는 건이 없습니다</div>}
+          <div className="divide-y divide-slate-50">
+            {pickedMonth.rows.map((r: any) => {
+              const loc = locByKey.get(normKey(r.supplier));
+              const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
+              return (
+                <div key={r.id} className={`px-3 py-2 text-xs ${key ? "cursor-pointer hover:bg-brand-50" : ""}`}
+                  onClick={() => key && onPick(key)} title={key ? "클릭하면 지도에서 위치 보기" : undefined}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-slate-500">ETA {fmtDate(r.eta)}</span>
+                      <span className="ml-1.5 font-bold text-slate-800">{r.material_name}</span>
+                    </div>
+                    <span className="shrink-0 font-semibold text-slate-700">{r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-"}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0 truncate text-[11px] text-slate-500">
+                      {r.supplier || "-"}
+                      <span className="text-slate-400">{loc ? ` · ${Number(loc.domestic) ? `국내 ${loc.region || ""}` : [loc.country, loc.region].filter(Boolean).join(" ")}` : " · 위치 미등록"}</span>
+                    </div>
+                    <StatusPill status={r.status} />
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    ETD {fmtDate(r.etd)}
+                    {r.unit_price != null && ` · ${r.currency || "USD"} ${fmtNum(Number(r.unit_price))}/MT`}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
