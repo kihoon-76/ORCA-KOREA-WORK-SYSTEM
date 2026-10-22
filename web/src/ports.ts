@@ -7,6 +7,7 @@ export const PORT_PRESETS: PortPreset[] = [
   { country: "인도", name: "Kandla (칸들라)", lat: 23.0333, lng: 70.2167 },
   { country: "인도", name: "Nhava Sheva / Mumbai (뭄바이)", lat: 18.9497, lng: 72.9508 },
   { country: "인도", name: "Chennai (첸나이)", lat: 13.0827, lng: 80.29 },
+  { country: "인도", name: "Visakhapatnam (비샤카파트남)", lat: 17.69, lng: 83.29 },
   { country: "인도", name: "Kolkata / Haldia (콜카타)", lat: 22.0257, lng: 88.0583 },
   { country: "인도", name: "Tuticorin (투티코린)", lat: 8.7642, lng: 78.1348 },
   { country: "인도", name: "Kochi (코치)", lat: 9.9667, lng: 76.2667 },
