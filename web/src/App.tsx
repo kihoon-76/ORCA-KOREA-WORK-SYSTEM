@@ -24,6 +24,7 @@ import Drive from "./pages/Drive";
 import CalcSettings from "./pages/CalcSettings";
 // 지도 라이브러리(Leaflet)가 커서, 수입 지도 현황판을 열 때만 불러온다
 const ImportMap = lazy(() => import("./pages/ImportMap"));
+const Settlements = lazy(() => import("./pages/Settlements"));
 
 interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 // 자주 쓰는 메뉴는 항상 위에, 나머지는 "더보기"에 접어둔다 (삭제가 아니라 펼치면 그대로 사용)
@@ -31,6 +32,7 @@ const MAIN_NAV: NavItem[] = [
   { to: "/", label: "대시보드", icon: "dashboard" },
   { to: "/imports", label: "원료 수입현황", icon: "sailing" },
   { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
+  { to: "/settlements", label: "정산 관리", icon: "receipt_long" },
   { to: "/approvals", label: "전자결재", icon: "approval" },
   { to: "/weekly", label: "주간결산 보고", icon: "event_note" },
   { to: "/drive", label: "파일함", icon: "folder_shared" },
@@ -210,6 +212,7 @@ export default function App() {
         <Route path="/drive" element={<Drive />} />
         <Route path="/imports" element={<Imports />} />
         <Route path="/import-map" element={<Suspense fallback={<Spinner />}><ImportMap /></Suspense>} />
+        <Route path="/settlements" element={<Suspense fallback={<Spinner />}><Settlements /></Suspense>} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/materials" element={<Materials />} />

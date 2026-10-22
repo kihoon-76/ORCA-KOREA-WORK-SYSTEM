@@ -359,3 +359,45 @@ CREATE TABLE IF NOT EXISTS supplier_locations (
   updated_by    INTEGER REFERENCES users(id),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============ 정산 관리 (바이어 대행 거래) ============
+-- 자금 사정상 HFS·KP HANSUK·DASAN BIO 같은 회사가 Buyer로 LC/TT를 열고, 오르카에 마진을 붙여 넘기는 거래를 건별로 대조·확인한다.
+-- 바이어 회사별 기본 마진 규칙
+CREATE TABLE IF NOT EXISTS settle_buyers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  buyer_key     TEXT NOT NULL UNIQUE,   -- 대문자·공백 정리한 회사 이름 (매칭용)
+  name          TEXT NOT NULL,
+  margin_type   TEXT NOT NULL DEFAULT 'pct',  -- pct(%) | usd_per_mt($/MT) | krw_per_kg(원/kg)
+  margin_value  REAL NOT NULL DEFAULT 0,
+  payment       TEXT,                   -- LC | TT
+  note          TEXT,
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- 수입 건별 정산 (원료 수입현황 1건 = 정산 1건)
+CREATE TABLE IF NOT EXISTS settlements (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id       INTEGER NOT NULL UNIQUE REFERENCES imports(id),
+  buyer           TEXT,
+  margin_type     TEXT,                 -- 비어 있으면 바이어 기본 규칙
+  margin_value    REAL,
+  st_unit_price   REAL,                 -- 정산서 매입 단가 ($/MT 또는 원/kg)
+  st_unit_basis   TEXT,                 -- usd_mt | krw_kg
+  st_qty          REAL,                 -- 정산서 수량 (MT)
+  st_fx           REAL,                 -- 적용 환율 (원/$)
+  st_goods_krw    REAL,                 -- 물대 (원)
+  st_fees_krw     REAL,                 -- 부대비용 합계 (원)
+  st_fee_detail   TEXT,                 -- JSON { LC수수료: n, 보험료: n, ... }
+  st_margin_krw   REAL,                 -- 바이어 이익 (원)
+  st_sell_unit    REAL,                 -- 바이어 → 오르카 판매 단가 (원/kg, 국내 건)
+  st_total_krw    REAL,                 -- 공급가 합계 (VAT 별도)
+  st_grand_krw    REAL,                 -- VAT 포함 합계
+  invoice_date    TEXT,                 -- 세금계산서 일자
+  due_date        TEXT,                 -- 오르카 결제 예정일
+  remits          TEXT,                 -- JSON [{date, amount, currency}] 바이어 → 공급사 송금
+  payments        TEXT,                 -- JSON [{date, amount}] 오르카 → 바이어 입금
+  steps           TEXT,                 -- JSON { statement|amount|invoice|paid|final: {at, by} }
+  extracted       TEXT,                 -- 자동 읽기 원본 결과 (참고용)
+  note            TEXT,
+  updated_by      INTEGER REFERENCES users(id),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
