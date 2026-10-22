@@ -334,7 +334,7 @@ export default function ImportMap() {
         </div>
       </div>
 
-      {/* 월별 물량 + 최근 기록 */}
+      {/* 월별 물량 + 지금 이동 중인 물량 */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-4">
           <MonthlyChart rows={rowsAllYears} year={year} locByKey={locByKey}
@@ -343,41 +343,12 @@ export default function ImportMap() {
               document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
             }} />
         </div>
-        <div className="card flex max-h-[360px] flex-col overflow-hidden">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-bold text-primary">최근 수입 기록</div>
-          <div className="overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-semibold">계약일</th>
-                  <th className="px-2 py-1.5 text-left font-semibold">원료</th>
-                  <th className="px-2 py-1.5 text-left font-semibold">공급사 · 위치</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">물량</th>
-                  <th className="px-3 py-1.5 text-left font-semibold">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...rows].sort((a, b) => String(b.contract_date || "").localeCompare(String(a.contract_date || ""))).slice(0, 30).map((r) => {
-                  const loc = locByKey.get(normKey(r.supplier));
-                  const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
-                  return (
-                    <tr key={r.id} className={`border-t border-slate-50 ${key ? "cursor-pointer hover:bg-brand-50" : ""}`}
-                      onClick={() => key && setSelectedKey(key)}>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{fmtDate(r.contract_date)}</td>
-                      <td className="px-2 py-1.5 font-semibold text-slate-700">{r.material_name}</td>
-                      <td className="px-2 py-1.5 text-slate-600">
-                        {r.supplier || "-"}
-                        <span className="ml-1 text-slate-400">{loc ? `· ${[loc.country, loc.region].filter(Boolean).join(" ")}` : "· 위치 미등록"}</span>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-slate-700">{r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-"}</td>
-                      <td className="px-3 py-1.5"><StatusPill status={r.status} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {rows.length === 0 && <div className="py-8 text-center text-xs text-slate-400">조건에 맞는 수입 건이 없습니다</div>}
-          </div>
+        <div className="card flex max-h-[420px] flex-col overflow-hidden">
+          <InTransitList rows={rowsAllYears.filter((r) => IN_TRANSIT.has(r.status))} locByKey={locByKey}
+            onPick={(key) => {
+              setSelectedKey(key);
+              document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }} />
         </div>
       </div>
 
@@ -642,6 +613,64 @@ function LocationDetail({ g, onClose, onEdit }: { g: Group; onClose: () => void;
       <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs">
         <Link to="/imports" className="font-semibold text-brand-700 hover:underline">원료 수입현황에서 보기 →</Link>
         <button className="text-slate-500 hover:underline" onClick={() => onEdit(g.suppliers[0])}>위치 수정</button>
+      </div>
+    </>
+  );
+}
+
+// 지금 이동 중인 물량 (선적 ~ 통관 단계) — 도착 예정일(ETA)이 가까운 순서로, 항해 진행률과 함께
+const DAY = 24 * 60 * 60 * 1000;
+function parseDay(v?: string | null) {
+  if (!v) return null;
+  const [y, m, d] = String(v).slice(0, 10).split("-").map(Number);
+  return y && m && d ? new Date(y, m - 1, d).getTime() : null;
+}
+function InTransitList({ rows, locByKey, onPick }: { rows: any[]; locByKey: Map<string, any>; onPick: (key: string) => void }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const t0 = today.getTime();
+  const sorted = [...rows].sort((a, b) => (parseDay(a.eta) ?? Infinity) - (parseDay(b.eta) ?? Infinity));
+  const qty = rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
+
+  return (
+    <>
+      <div className="flex items-baseline justify-between border-b border-slate-100 px-4 py-3">
+        <div className="text-sm font-bold text-primary">지금 이동 중인 물량 <span className="text-xs font-normal text-slate-400">(선적~통관, 도착 가까운 순)</span></div>
+        <div className="text-xs font-semibold" style={{ color: COLOR_TRANSIT }}>{rows.length}건 · {fmtNum(qty)} MT</div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {sorted.length === 0 && <div className="py-10 text-center text-xs text-slate-400">지금 이동 중인 건이 없습니다</div>}
+        {sorted.map((r) => {
+          const loc = locByKey.get(normKey(r.supplier));
+          const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
+          const etd = parseDay(r.etd), eta = parseDay(r.eta);
+          const pct = etd != null && eta != null && eta > etd ? Math.min(1, Math.max(0, (t0 - etd) / (eta - etd))) : null;
+          const dLeft = eta != null ? Math.round((eta - t0) / DAY) : null;
+          const dText = dLeft == null ? "ETA 미정" : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? "오늘 도착" : `도착 후 ${-dLeft}일`;
+          const place = loc ? (Number(loc.domestic) ? `국내 · ${loc.region || ""}` : [loc.country, loc.region].filter(Boolean).join(" · ")) : "위치 미등록";
+          return (
+            <div key={r.id} className={`border-b border-slate-50 px-4 py-2.5 text-xs ${key ? "cursor-pointer hover:bg-brand-50" : ""}`}
+              onClick={() => key && onPick(key)} title={key ? "클릭하면 지도에서 위치 보기" : undefined}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-700">{r.material_name} <span className="font-normal text-slate-500">· {r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-"}</span></div>
+                  <div className="truncate text-[11px] text-slate-500">{r.supplier || "-"} <span className="text-slate-400">· {place}</span>{r.vessel ? <span className="text-slate-400"> · {r.vessel}</span> : null}</div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className={`font-bold ${dLeft != null && dLeft <= 3 ? "text-amber-700" : "text-slate-700"}`}>{dText}</div>
+                  <StatusPill status={r.status} />
+                </div>
+              </div>
+              <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-400">
+                <span className="w-[70px] shrink-0">ETD {fmtDate(r.etd)}</span>
+                <div className="relative h-1.5 flex-1 rounded-full bg-slate-100">
+                  {pct != null && <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct * 100}%`, background: COLOR_TRANSIT }} />}
+                </div>
+                <span className="w-[70px] shrink-0 text-right">ETA {fmtDate(r.eta)}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </>
   );
