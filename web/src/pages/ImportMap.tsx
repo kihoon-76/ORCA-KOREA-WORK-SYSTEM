@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { api } from "../api";
 import { Spinner, Modal, Icon, PageHeader, Badge } from "../components/ui";
 import { AttachmentPanel } from "./TradeModule";
-import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES } from "../ports";
+import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES, KOREA_CITIES, KOREA_PROVINCES, koreaCityLabel, type KoreaCity } from "../ports";
 
 // ───────────────────────── 공용 도우미 ─────────────────────────
 // 배경지도: Esri 밝은 회색 지도 (API 키 없이 사용) — 군더더기 없이 깔끔해서 원과 항로 선이 잘 보인다
@@ -935,6 +935,8 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
 }) {
   const set = (k: string, v: any) => onChange({ ...value, [k]: v });
   const presetIdx = PORT_PRESETS.findIndex((p) => Number(value.lat) === p.lat && Number(value.lng) === p.lng);
+  const cityIdx = KOREA_CITIES.findIndex((c) => Number(value.lat) === c.lat && Number(value.lng) === c.lng);
+  const pickCity = (c: KoreaCity) => onChange({ ...value, country: "대한민국", region: koreaCityLabel(c), lat: c.lat, lng: c.lng });
 
   return (
     <div>
@@ -948,10 +950,23 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
           })} />
         <span>
           <span className="font-semibold text-teal-800">국내 공급사</span>
-          <span className="block text-xs text-slate-500">한국 안의 업체예요. 지도에 초록색 점으로 표시되고 바다 항로 선은 그리지 않아요. 아래 지도에서 업체(공장·창고) 위치를 클릭해 주세요.</span>
+          <span className="block text-xs text-slate-500">한국 안의 업체예요. 지도에 청록색 점으로 표시되고 바다 항로 선은 그리지 않아요. 아래 지도에서 업체(공장·창고) 위치를 클릭해 주세요.</span>
         </span>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
+        {value.domestic && (
+          <label className="text-xs text-slate-500 sm:col-span-2">시·군 고르기 <span className="text-slate-400">(또는 아래 지도의 도시 점을 클릭)</span>
+            <select className="input mt-1 text-sm" value={cityIdx >= 0 ? String(cityIdx) : ""}
+              onChange={(e) => { const c = KOREA_CITIES[Number(e.target.value)]; if (c) pickCity(c); }}>
+              <option value="">— 도시를 고르세요 —</option>
+              {KOREA_PROVINCES.map((pv) => (
+                <optgroup key={pv} label={pv}>
+                  {KOREA_CITIES.map((c, i) => c.province === pv ? <option key={i} value={i}>{c.name}</option> : null)}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        )}
         <label className={`text-xs text-slate-500 sm:col-span-2 ${value.domestic ? "hidden" : ""}`}>주요 항구에서 고르기
           <select className="input mt-1 text-sm" value={presetIdx >= 0 ? String(presetIdx) : ""}
             onChange={(e) => {
@@ -974,10 +989,10 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
         </label>
       </div>
       <div className="mt-3 text-xs text-slate-500">
-        지도를 클릭하면 그 위치로 지정돼요
+        {value.domestic ? "회색 도시 점을 클릭하면 그 도시 위치로 정확히 지정돼요 (빈 곳을 클릭하면 그 자리로 지정)" : "지도를 클릭하면 그 위치로 지정돼요"}
         {value.lat !== "" && <span className="ml-2 text-slate-400">(현재: {Number(value.lat).toFixed(3)}, {Number(value.lng).toFixed(3)})</span>}
       </div>
-      <LocationPicker lat={value.lat === "" ? null : Number(value.lat)} lng={value.lng === "" ? null : Number(value.lng)} focusKorea={!!value.domestic}
+      <LocationPicker lat={value.lat === "" ? null : Number(value.lat)} lng={value.lng === "" ? null : Number(value.lng)} focusKorea={!!value.domestic} onCity={pickCity}
         onPick={(lat, lng) => onChange({ ...value, lat: Number(lat.toFixed(4)), lng: Number(lng.toFixed(4)) })} />
       <div className="mt-4 flex justify-end gap-2">
         <button className="btn-secondary" onClick={onCancel}>목록으로</button>
@@ -987,7 +1002,12 @@ function SupplierEditor({ value, onChange, onCancel, onSave, saving }: {
   );
 }
 
-function LocationPicker({ lat, lng, onPick, focusKorea }: { lat: number | null; lng: number | null; onPick: (lat: number, lng: number) => void; focusKorea?: boolean }) {
+function LocationPicker({ lat, lng, onPick, focusKorea, onCity }: {
+  lat: number | null; lng: number | null; onPick: (lat: number, lng: number) => void; focusKorea?: boolean; onCity?: (c: KoreaCity) => void;
+}) {
+  const cityLayerRef = useRef<L.LayerGroup | null>(null);
+  const onCityRef = useRef(onCity);
+  onCityRef.current = onCity;
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.CircleMarker | null>(null);
@@ -1011,10 +1031,24 @@ function LocationPicker({ lat, lng, onPick, focusKorea }: { lat: number | null; 
     return () => { clearTimeout(t); map.remove(); mapRef.current = null; markerRef.current = null; };
   }, []);
 
-  // '국내 공급사'로 체크하면 한국 지도로 바로 이동
+  // '국내 공급사'로 체크하면 한국 지도로 바로 이동하고, 클릭할 수 있는 도시 점을 보여준다
   useEffect(() => {
     const map = mapRef.current;
-    if (map && focusKorea && !(lat != null && lng != null && lat > 33 && lat < 39 && lng > 124 && lng < 132)) map.setView([36.3, 127.8], 7);
+    if (!map) return;
+    cityLayerRef.current?.remove();
+    cityLayerRef.current = null;
+    if (!focusKorea) return;
+    if (!(lat != null && lng != null && lat > 33 && lat < 39 && lng > 124 && lng < 132)) map.fitBounds([[33.1, 125.0], [38.6, 129.8]]);
+    const layer = L.layerGroup();
+    for (const c of KOREA_CITIES) {
+      L.circleMarker([c.lat, c.lng], { radius: 5, color: "#fff", weight: 1.5, fillColor: "#64748b", fillOpacity: 0.9, bubblingMouseEvents: false })
+        .bindTooltip(esc(koreaCityLabel(c)), { direction: "top", offset: [0, -5] })
+        .on("click", () => onCityRef.current?.(c))
+        .addTo(layer);
+    }
+    layer.addTo(map);
+    cityLayerRef.current = layer;
+    markerRef.current?.bringToFront(); // 지정한 위치 점이 도시 점에 가리지 않도록
   }, [focusKorea]);
 
   useEffect(() => {
