@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { Spinner, Icon, Badge, Modal } from "../components/ui";
-import { ApprovalCreateModal, ApprovalDetailModal } from "./Approvals";
-import { parseTripReportContent, tripPeriod } from "../tripReport";
+import { ApprovalCreateModal, ApprovalDetailModal, DOC_LABEL } from "./Approvals";
 import { AttachmentPanel } from "./TradeModule";
 
 // 수입 지도 미니 보기 — 지도 라이브러리가 커서 필요할 때만 불러온다
@@ -29,21 +28,29 @@ export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   // 이번 달 수입 요약(ETA 기준)을 계산하기 위한 원료 수입현황 전체 목록
   const [imports, setImports] = useState<any[]>([]);
-  // 출장결과보고: 누구나 기안 → 대표이사 최종결재 (재무차장 자동 열람)
-  const [tripReports, setTripReports] = useState<any[]>([]);
-  const [creating, setCreating] = useState(false);
+  // 결재 대기 문서: 내가 결재할 차례인 문서 + 내가 올렸는데 아직 결재 중인 문서
+  const [pending, setPending] = useState<any[]>([]);
   const [editItem, setEditItem] = useState<any>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   // 다가오는 선박 일정에서 행 클릭 시 해당 건의 첨부파일을 바로 보여주기 위한 상태
   const [filesFor, setFilesFor] = useState<any>(null);
 
-  function loadTripReports() {
-    api.get("/approvals?doc_type=trip_report&limit=6").then((r) => setTripReports(r.items || [])).catch(() => {});
+  function loadPending() {
+    Promise.all([
+      api.get("/approvals?inbox=1").catch(() => ({ items: [] })),
+      api.get("/approvals?mine=1").catch(() => ({ items: [] })),
+    ]).then(([inbox, mine]) => {
+      const seen = new Set<number>();
+      const list: any[] = [];
+      for (const a of inbox.items || []) { seen.add(a.id); list.push({ ...a, _mine: false }); }
+      for (const a of mine.items || []) if (a.status === "pending" && !seen.has(a.id)) list.push({ ...a, _mine: true });
+      setPending(list);
+    });
   }
   useEffect(() => {
     api.get("/dashboard").then(setData);
     api.get("/trade/imports").then((r) => setImports(r.items || []));
-    loadTripReports();
+    loadPending();
   }, []);
   // 이번 달 도착(ETA) 건수·물량·금액 + 지금 이동 중(선적~통관)
   const month = useMemo(() => {
@@ -139,41 +146,39 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 출장결과보고 결재 */}
+      {/* 결재 대기 */}
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant px-6 py-4">
           <div>
-            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="flight_takeoff" className="text-secondary" /> 출장결과보고 결재</h3>
-            <p className="mt-0.5 text-xs text-on-surface-variant">누구나 기안 · 대표이사 최종결재 · 재무차장 자동 열람 (참조 지정 가능)</p>
+            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="pending_actions" className="text-secondary" /> 결재 대기</h3>
+            <p className="mt-0.5 text-xs text-on-surface-variant">내가 결재할 차례인 문서와, 내가 올렸는데 아직 결재가 끝나지 않은 문서예요</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="btn-primary" onClick={() => setCreating(true)}>+ 출장결과보고 기안</button>
-            <Link to="/trip-reports" className="text-sm font-semibold text-secondary hover:underline">전체보기</Link>
-          </div>
+          <Link to="/approvals" className="text-sm font-semibold text-secondary hover:underline">전자결재 열기</Link>
         </div>
-        {tripReports.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-on-surface-variant">기안된 출장결과보고가 없습니다</p>
+        {pending.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-on-surface-variant">결재 대기 중인 문서가 없습니다</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
               <thead className="border-b border-outline-variant bg-surface-container-low">
-                <tr><th className="th">제목</th><th className="th">기안자</th><th className="th">출장지</th><th className="th">출장기간</th><th className="th">출장비용</th><th className="th">상태</th><th className="th"></th></tr>
+                <tr><th className="th">구분</th><th className="th">문서</th><th className="th">제목</th><th className="th">기안자</th><th className="th">금액</th><th className="th">상신일</th><th className="th"></th></tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
-                {tripReports.map((t) => {
-                  const p = parseTripReportContent(t.content || "");
-                  return (
-                    <tr key={t.id} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setDetailId(t.id)}>
-                      <td className="td font-bold">{t.title}</td>
-                      <td className="td">{t.requester_name}</td>
-                      <td className="td">{p.destination || "-"}</td>
-                      <td className="td font-mono text-xs">{tripPeriod(p) || "-"}</td>
-                      <td className="td">{t.amount != null ? `${t.currency} ${Number(t.amount).toLocaleString()}` : "-"}</td>
-                      <td className="td"><Badge value={t.status} /></td>
-                      <td className="td text-right"><Icon name="chevron_right" className="text-on-surface-variant" /></td>
-                    </tr>
-                  );
-                })}
+                {pending.map((a) => (
+                  <tr key={a.id} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setDetailId(a.id)}>
+                    <td className="td whitespace-nowrap">
+                      {a._mine
+                        ? <span className="badge bg-surface-container-highest text-on-surface-variant">내가 상신</span>
+                        : <span className="badge bg-error-container text-error">내 결재 차례</span>}
+                    </td>
+                    <td className="td whitespace-nowrap text-xs">{DOC_LABEL[a.doc_type] || a.doc_type || "-"}</td>
+                    <td className="td font-bold">{a.title}</td>
+                    <td className="td">{a.requester_name || "-"}</td>
+                    <td className="td whitespace-nowrap">{a.amount != null ? `${a.currency || ""} ${Number(a.amount).toLocaleString()}` : "-"}</td>
+                    <td className="td whitespace-nowrap font-mono text-xs">{formatDateWithWeekday(String(a.created_at || "").slice(0, 10))}</td>
+                    <td className="td text-right"><Icon name="chevron_right" className="text-on-surface-variant" /></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -193,14 +198,14 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      {(creating || editItem) && (
-        <ApprovalCreateModal docType="trip_report" editItem={editItem}
-          onClose={() => { setCreating(false); setEditItem(null); }}
-          onSaved={() => { setCreating(false); setEditItem(null); loadTripReports(); }} />
+      {editItem && (
+        <ApprovalCreateModal docType={editItem.doc_type || null} editItem={editItem}
+          onClose={() => setEditItem(null)}
+          onSaved={() => { setEditItem(null); loadPending(); }} />
       )}
       {detailId !== null && (
         <ApprovalDetailModal id={detailId} role={user!.role} meId={user!.id}
-          onClose={() => { setDetailId(null); loadTripReports(); }}
+          onClose={() => { setDetailId(null); loadPending(); }}
           onEdit={(item) => { setDetailId(null); setEditItem({ ...item, viewer_ids: item.viewer_ids || [] }); }} />
       )}
 

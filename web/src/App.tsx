@@ -31,6 +31,7 @@ const MAIN_NAV: NavItem[] = [
   { to: "/", label: "대시보드", icon: "dashboard" },
   { to: "/imports", label: "원료 수입현황", icon: "sailing" },
   { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
+  { to: "/approvals", label: "전자결재", icon: "approval" },
   { to: "/weekly", label: "주간결산 보고", icon: "event_note" },
   { to: "/drive", label: "파일함", icon: "folder_shared" },
 ];
@@ -39,7 +40,6 @@ const MORE_NAV: { group: string; items: NavItem[] }[] = [
     { to: "/tasks", label: "업무 / 할일", icon: "task_alt" },
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
-    { to: "/approvals", label: "전자결재", icon: "approval" },
     { to: "/trip-reports", label: "출장결과보고", icon: "flight_takeoff" },
   ]},
   { group: "Communication", items: [
