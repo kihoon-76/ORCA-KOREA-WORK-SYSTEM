@@ -7,8 +7,9 @@ import { Spinner, Modal, Icon, PageHeader } from "../components/ui";
 import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES } from "../ports";
 
 // ───────────────────────── 공용 도우미 ─────────────────────────
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+// 배경지도: OpenStreetMap 기본 지도 (API 키 없이 무료로 사용 가능)
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 const COLOR_DONE = "#4059aa";    // 계약 / 도착 이후
 const COLOR_TRANSIT = "#d97706"; // 이동 중 (선적~통관)
@@ -387,7 +388,7 @@ function WorldMap({ groups, dest, selectedKey, onSelect, apiRef }: {
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
     const map = L.map(elRef.current, { center: [25, 115], zoom: 3, minZoom: 2, zoomControl: true, worldCopyJump: false });
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, subdomains: "abcd", maxZoom: 12 }).addTo(map);
+    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 12 }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     map.on("click", () => onSelectRef.current(null));
     mapRef.current = map;
@@ -828,7 +829,7 @@ function LocationPicker({ lat, lng, onPick }: { lat: number | null; lng: number 
   useEffect(() => {
     if (!elRef.current) return;
     const map = L.map(elRef.current, { center: lat != null && lng != null ? [lat, wrapLng(lng)] : [20, 100], zoom: lat != null ? 5 : 2, minZoom: 2 });
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, subdomains: "abcd", maxZoom: 14 }).addTo(map);
+    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 14 }).addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => {
       const p = e.latlng.wrap();
       onPickRef.current(p.lat, p.lng);
