@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { Spinner, Icon, Badge, Modal } from "../components/ui";
 import { ApprovalCreateModal, ApprovalDetailModal, DOC_LABEL } from "./Approvals";
-import { AttachmentPanel } from "./TradeModule";
+import ShipCalendar from "../components/ShipCalendar";
 
 // 수입 지도 미니 보기 — 지도 라이브러리가 커서 필요할 때만 불러온다
 const MiniImportMap = lazy(() => import("./ImportMap").then((m) => ({ default: m.MiniImportMap })));
@@ -32,8 +32,6 @@ export default function Dashboard() {
   const [pending, setPending] = useState<any[]>([]);
   const [editItem, setEditItem] = useState<any>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
-  // 다가오는 선박 일정에서 행 클릭 시 해당 건의 첨부파일을 바로 보여주기 위한 상태
-  const [filesFor, setFilesFor] = useState<any>(null);
 
   function loadPending() {
     Promise.all([
@@ -102,52 +100,15 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* 다가오는 선박 일정 + 수입 지도 미니 보기 */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="card overflow-hidden lg:col-span-3">
-          <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
-            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="sailing" className="text-secondary" /> 다가오는 선박 일정</h3>
-            <Link to="/imports" className="text-sm font-semibold text-secondary hover:underline">전체보기</Link>
-          </div>
-          {data.upcoming_shipments.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-on-surface-variant">예정된 선박 일정이 없습니다</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-outline-variant bg-surface-container-low">
-                  <tr><th className="th">구분</th><th className="th">원료명</th><th className="th">공급사</th><th className="th">물량</th><th className="th">ETD</th><th className="th">ETA</th><th className="th">LC개설</th></tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant">
-                  {data.upcoming_shipments.map((s: any, i: number) => (
-                    <tr key={i} className="cursor-pointer transition-colors hover:bg-surface-container-low" onClick={() => setFilesFor(s)} title="클릭하면 첨부파일 보기">
-                      <td className="td"><span className="mr-1 text-xs text-on-surface-variant">{s.kind === "import" ? "수입" : "수출"}</span><Badge value={s.status} /></td>
-                      <td className="td font-bold">{s.material_name}</td>
-                      <td className="td">{s.partner || "-"}</td>
-                      <td className="td">{s.quantity != null ? `${Number(s.quantity).toLocaleString()} ${s.unit || "MT"}` : "-"}</td>
-                      <td className="td font-mono text-xs">{formatDateWithWeekday(s.etd)}</td>
-                      <td className="td font-mono text-xs">{formatDateWithWeekday(s.eta)}</td>
-                      <td className="td">{s.lc_bank || "-"}{s.lc_no ? <div className="text-xs text-on-surface-variant">{s.lc_no}</div> : null}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="card overflow-hidden lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
-            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="public" className="text-secondary" /> 수입 지도</h3>
-            <Link to="/import-map" className="text-sm font-semibold text-secondary hover:underline">현황판 열기</Link>
-          </div>
-          <Suspense fallback={<div className="flex h-[340px] items-center justify-center"><Spinner /></div>}>
-            <MiniImportMap />
-          </Suspense>
-        </div>
+      {/* 선박 일정 캘린더 — ETD(출항)·ETA(도착)를 달력으로, 끌어서/클릭해서 날짜 수정 */}
+      <div className="card overflow-hidden">
+        <ShipCalendar imports={imports} onUpdated={(item) => setImports((prev) => prev.map((x) => (x.id === item.id ? item : x)))} />
       </div>
 
+      {/* 결재 대기 + 수입 지도 미니 보기 */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
       {/* 결재 대기 */}
-      <div className="card overflow-hidden">
+        <div className="card overflow-hidden lg:col-span-3">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant px-6 py-4">
           <div>
             <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="pending_actions" className="text-secondary" /> 결재 대기</h3>
@@ -159,9 +120,9 @@ export default function Dashboard() {
           <p className="px-6 py-10 text-center text-sm text-on-surface-variant">결재 대기 중인 문서가 없습니다</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <table className="table-compact w-full min-w-[640px]">
               <thead className="border-b border-outline-variant bg-surface-container-low">
-                <tr><th className="th">구분</th><th className="th">문서</th><th className="th">제목</th><th className="th">기안자</th><th className="th">금액</th><th className="th">상신일</th><th className="th"></th></tr>
+                <tr><th className="th">구분</th><th className="th">문서</th><th className="th">제목</th><th className="th whitespace-nowrap">기안자</th><th className="th">금액</th><th className="th">상신일</th><th className="th"></th></tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
                 {pending.map((a) => (
@@ -172,8 +133,8 @@ export default function Dashboard() {
                         : <span className="badge bg-error-container text-error">내 결재 차례</span>}
                     </td>
                     <td className="td whitespace-nowrap text-xs">{DOC_LABEL[a.doc_type] || a.doc_type || "-"}</td>
-                    <td className="td font-bold">{a.title}</td>
-                    <td className="td">{a.requester_name || "-"}</td>
+                    <td className="td min-w-[180px] font-bold">{a.title}</td>
+                    <td className="td whitespace-nowrap">{a.requester_name || "-"}</td>
                     <td className="td whitespace-nowrap">{a.amount != null ? `${a.currency || ""} ${Number(a.amount).toLocaleString()}` : "-"}</td>
                     <td className="td whitespace-nowrap font-mono text-xs">{formatDateWithWeekday(String(a.created_at || "").slice(0, 10))}</td>
                     <td className="td text-right"><Icon name="chevron_right" className="text-on-surface-variant" /></td>
@@ -184,19 +145,17 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-
-      {filesFor && (
-        <Modal open={!!filesFor} onClose={() => setFilesFor(null)} title={`📎 ${filesFor.material_name} 첨부파일`} wide>
-          <p className="mb-3 text-xs text-on-surface-variant">
-            {filesFor.kind === "import" ? "수입" : "수출"} · {filesFor.partner || "-"}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="contract" label="📄 계약서" />
-            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="shipping_docs" label="🚢 선적서류" />
-            <AttachmentPanel entityType={filesFor.kind} entityId={filesFor.id} category="settlement" label="💰 정산서류" />
+        <div className="card overflow-hidden lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
+            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="public" className="text-secondary" /> 수입 지도</h3>
+            <Link to="/import-map" className="text-sm font-semibold text-secondary hover:underline">현황판 열기</Link>
           </div>
-        </Modal>
-      )}
+          <Suspense fallback={<div className="flex h-[340px] items-center justify-center"><Spinner /></div>}>
+            <MiniImportMap />
+          </Suspense>
+        </div>
+      </div>
+
 
       {editItem && (
         <ApprovalCreateModal docType={editItem.doc_type || null} editItem={editItem}
