@@ -9,7 +9,7 @@ import Attendance from "./pages/Attendance";
 import Calendar from "./pages/Calendar";
 import Approvals from "./pages/Approvals";
 import WeeklyReports from "./pages/WeeklyReports";
-import WeeklyReminder from "./components/WeeklyReminder";
+import WeeklyReminder, { useWeeklyStatus, weeklyNeedsDot } from "./components/WeeklyReminder";
 import PaymentNotice from "./components/PaymentNotice";
 import Imports from "./pages/Imports";
 import Exports from "./pages/Exports";
@@ -61,18 +61,26 @@ const MORE_NAV: { group: string; items: NavItem[] }[] = [
 ];
 const MORE_OPEN_KEY = "orca_nav_more_open";
 
-function NavItemLink({ i, onClose }: { i: NavItem; onClose: () => void }) {
+function NavItemLink({ i, onClose, dot }: { i: NavItem; onClose: () => void; dot?: string }) {
   return (
     <NavLink to={i.to} end={i.to === "/"} onClick={onClose}
       className={({ isActive }) => `flex items-center gap-4 px-4 py-2.5 transition-all duration-150 ${isActive ? "bg-secondary-container font-bold text-on-secondary-container" : "text-on-surface-variant hover:bg-surface-container-highest"}`}>
       <Icon name={i.icon} size={22} />
       <span className="mono-label">{i.label}</span>
+      {dot != null && (dot
+        ? <span className="ml-auto rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{dot}</span>
+        : <span className="ml-auto h-2 w-2 rounded-full bg-secondary" title="이번 주 작성 전" />)}
     </NavLink>
   );
 }
 
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth();
+  // 메뉴 옆 작은 표시: 주간결산 작성 전이면 점, 대표이사는 결재 대기 주간결산 건수
+  const weekly = useWeeklyStatus();
+  const navDots: Record<string, string | undefined> = {};
+  if (weeklyNeedsDot(weekly)) navDots["/weekly"] = "";
+  if (user?.role === "ceo" && weekly?.ceo_pending > 0) navDots["/approvals"] = String(weekly.ceo_pending);
   const location = useLocation();
   const inMore = MORE_NAV.some((g) => g.items.some((i) => location.pathname.startsWith(i.to)));
   const [moreOpen, setMoreOpen] = useState<boolean>(() => {
@@ -95,7 +103,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-2 scrollbar-hide">
           <div>
-            {MAIN_NAV.map((i) => <NavItemLink key={i.to} i={i} onClose={onClose} />)}
+            {MAIN_NAV.map((i) => <NavItemLink key={i.to} i={i} onClose={onClose} dot={navDots[i.to]} />)}
           </div>
           <div className="border-t border-outline-variant pt-2">
             <button type="button" onClick={toggleMore}
