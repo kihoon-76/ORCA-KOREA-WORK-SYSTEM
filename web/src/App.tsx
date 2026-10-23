@@ -182,7 +182,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-8">
+        <main className="main-scroll flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="mx-auto max-w-[1440px]">{children}</div>
         </main>
       </div>
