@@ -117,6 +117,10 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
   };
 
   const dayEvents = dayList ? byDate.get(dayList) || [] : [];
+  // 팝업의 이전/다음 순서: 도착일(ETA, 없으면 출항일) 순
+  const navList = useMemo(() => imports
+    .filter((r) => r.eta || r.etd)
+    .sort((a, b) => String(a.eta || a.etd).localeCompare(String(b.eta || b.etd))), [imports]);
 
   return (
     <div>
@@ -182,15 +186,14 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         </div>
         <p className="px-6 py-2 text-[11px] text-on-surface-variant">일정을 클릭하면 날짜를 고치거나 서류를 볼 수 있고, 끌어서 다른 날짜에 놓으면 그 날짜로 바뀌어요.</p>
         </div>
-        {/* 오른쪽 칸: 평소엔 다가오는 일정 목록, 일정을 누르면 그 건의 상세 (캘린더는 그대로 보임) */}
-        {editing ? (
-          <div className="flex h-[640px] flex-col border-t border-outline-variant xl:h-auto xl:max-h-[820px] xl:w-[420px] xl:border-l xl:border-t-0">
-            <ImportDrawer variant="inline" row={imports.find((r) => r.id === editing.id) || editing} onClose={() => setEditing(null)} onUpdated={onUpdated} />
-          </div>
-        ) : (
-          <UpcomingList imports={imports} today={today} onOpen={setEditing} />
-        )}
+        <UpcomingList imports={imports} today={today} onOpen={setEditing} />
       </div>
+
+      {/* 일정 상세 팝업 — 이전/다음으로 날짜순 넘겨 보기 */}
+      {editing && (
+        <ImportDrawer row={imports.find((r) => r.id === editing.id) || editing} list={navList}
+          onNavigate={setEditing} onClose={() => setEditing(null)} onUpdated={onUpdated} />
+      )}
 
       {/* 하루 일정 전체 */}
       {dayList && (

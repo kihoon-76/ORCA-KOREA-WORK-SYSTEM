@@ -380,6 +380,8 @@ export default function ImportMap() {
 
       {detailRow && (
         <ImportDrawer row={(imports || []).find((x) => x.id === detailRow.id) || detailRow} onClose={() => setDetailRow(null)}
+          list={(imports || []).filter((x) => x.eta || x.etd).sort((a, b) => String(a.eta || a.etd).localeCompare(String(b.eta || b.etd)))}
+          onNavigate={setDetailRow}
           onUpdated={(item) => setImports((prev) => (prev || []).map((x) => (x.id === item.id ? item : x)))}
           onLocate={locByKey.get(normKey(detailRow.supplier)) ? () => {
             const loc = locByKey.get(normKey(detailRow.supplier));
