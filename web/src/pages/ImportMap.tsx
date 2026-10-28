@@ -4,7 +4,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../api";
 import { Spinner, Modal, Icon, PageHeader, Badge } from "../components/ui";
-import { AttachmentPanel, QualityPanel, PriceCalcPanel } from "./TradeModule";
+import { AttachmentPanel } from "./TradeModule";
+import ImportDrawer from "../components/ImportDrawer";
 import { PORT_PRESETS, KOREA_PORTS, PRESET_COUNTRIES, KOREA_CITIES, KOREA_PROVINCES, koreaCityLabel, type KoreaCity } from "../ports";
 
 // ───────────────────────── 공용 도우미 ─────────────────────────
@@ -378,12 +379,14 @@ export default function ImportMap() {
       </div>
 
       {detailRow && (
-        <ImportDetailModal row={detailRow} loc={locByKey.get(normKey(detailRow.supplier)) || null} onClose={() => setDetailRow(null)}
-          onLocate={(key) => {
+        <ImportDrawer row={(imports || []).find((x) => x.id === detailRow.id) || detailRow} onClose={() => setDetailRow(null)}
+          onUpdated={(item) => setImports((prev) => (prev || []).map((x) => (x.id === item.id ? item : x)))}
+          onLocate={locByKey.get(normKey(detailRow.supplier)) ? () => {
+            const loc = locByKey.get(normKey(detailRow.supplier));
             setDetailRow(null);
-            setSelectedKey(key);
+            setSelectedKey(`${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`);
             document.getElementById("import-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }} />
+          } : undefined} />
       )}
 
       <LocationManager open={managerOpen} focus={managerFocus} onClose={() => setManagerOpen(false)}
@@ -710,100 +713,6 @@ function UpcomingShipments({ rows, locByKey, onPick, onOpen }: {
         </div>
       )}
     </>
-  );
-}
-
-// ───────────────────────── 수입 건 상세 (정보 + 서류) ─────────────────────────
-const STAGE_FLOW = [
-  { v: "contracted", l: "계약" }, { v: "shipped", l: "선적" }, { v: "customs", l: "통관" }, { v: "stored", l: "입고" },
-  { v: "processed", l: "가공" }, { v: "released", l: "출고" }, { v: "settled", l: "정산" },
-];
-const LEGACY_STAGE_IDX: Record<string, number> = { arrived: 1, cleared: 3, melt_in: 4, melt_out: 4, delivered: 6, done: 6 };
-
-function ImportDetailModal({ row: r, loc, onClose, onLocate }: { row: any; loc: any; onClose: () => void; onLocate: (key: string) => void }) {
-  const [panel, setPanel] = useState<"" | "quality" | "price">("");
-  const [qualityDraft, setQualityDraft] = useState<Record<string, string> | undefined>(undefined);
-  const stageIdx = (() => { const i = STAGE_FLOW.findIndex((x) => x.v === r.status); return i >= 0 ? i : LEGACY_STAGE_IDX[r.status] ?? 0; })();
-  const key = loc ? `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}` : null;
-  const place = loc ? (Number(loc.domestic) ? `국내 · ${loc.region || ""}` : [loc.country, loc.region].filter(Boolean).join(" · ")) : "위치 미등록";
-  const qty = r.quantity != null ? `${fmtNum(Number(r.quantity))} ${r.unit || "MT"}` : "-";
-  const amount = rowAmount(r);
-  const info: [string, any][] = [
-    ["계약일", fmtDate(r.contract_date)],
-    ["공급사(Seller)", r.supplier || "-"],
-    ["구매자(Buyer)", r.lc_bank || "-"],
-    ["물량", qty],
-    ["단가", r.unit_price != null ? `${r.currency || "USD"} ${fmtNum(Number(r.unit_price))}` : "-"],
-    ["총액", amount ? `${r.currency || "USD"} ${fmtNum(amount)}` : "-"],
-    ["거래조건 · 결제", [r.incoterms, r.payment_type].filter(Boolean).join(" · ") || "-"],
-    ["선박", r.vessel || "-"],
-    ["BL번호", r.bl_no || "-"],
-    ["ETD (출항)", fmtDate(r.etd)],
-    ["ETA (도착)", fmtDate(r.eta)],
-    ["LC번호", r.lc_no || "-"],
-  ];
-  return (
-    <Modal open onClose={onClose} title={`${r.material_name}`} wide="xl">
-      <div className="-mt-1 mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <StatusPill status={r.status} />
-        <span>{r.supplier || "-"} · {place}</span>
-      </div>
-
-      {/* 진행상황 */}
-      <div className="mb-4 flex flex-wrap items-center gap-1">
-        {STAGE_FLOW.map((st, i) => (
-          <Fragment key={st.v}>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${i === stageIdx ? "bg-primary text-white" : i < stageIdx ? "bg-secondary-fixed text-on-secondary-container" : "bg-slate-100 text-slate-400"}`}>{st.l}</span>
-            {i < STAGE_FLOW.length - 1 && <span className={`h-0.5 w-3 ${i < stageIdx ? "bg-secondary-fixed-dim" : "bg-slate-200"}`} />}
-          </Fragment>
-        ))}
-      </div>
-
-      {/* 기본 정보 */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 p-3 text-xs sm:grid-cols-4">
-        {info.map(([label, value]) => (
-          <div key={label}>
-            <div className="text-slate-400">{label}</div>
-            <div className="font-semibold text-slate-700">{value}</div>
-          </div>
-        ))}
-        {r.note && (
-          <div className="col-span-2 sm:col-span-4">
-            <div className="text-slate-400">메모</div>
-            <div className="whitespace-pre-wrap text-slate-700">{r.note}</div>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setPanel((p) => (p === "quality" ? "" : "quality"))}
-          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${panel === "quality" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}>🧪 품질규격</button>
-        <button type="button" onClick={() => setPanel((p) => (p === "price" ? "" : "price"))}
-          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${panel === "price" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"}`}>💰 원가계산</button>
-        <span className="ml-auto flex items-center gap-3 text-xs">
-          {key && <button className="font-semibold text-secondary hover:underline" onClick={() => onLocate(key)}>📍 지도에서 위치 보기</button>}
-          <Link to="/imports" className="font-semibold text-secondary hover:underline">원료 수입현황 열기 →</Link>
-        </span>
-      </div>
-      {panel === "quality" && (
-        <div className="mt-3">
-          <QualityPanel entityType="import" entityId={r.id} draft={qualityDraft} onDraftChange={setQualityDraft} />
-        </div>
-      )}
-      {panel === "price" && (
-        <div className="mt-3">
-          <PriceCalcPanel entityType="import" entityId={r.id} defaultProduct={r.material_name} defaultQuantity={r.quantity}
-            defaultShipper={r.supplier} defaultIncoterms={r.incoterms} defaultContractPrice={r.unit_price} qualityDraft={qualityDraft} />
-        </div>
-      )}
-
-      {/* 서류 */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <AttachmentPanel entityType="import" entityId={r.id} category="contract" label="📄 계약서" />
-        <AttachmentPanel entityType="import" entityId={r.id} category="shipping_docs" label="🚢 선적서류" />
-        <AttachmentPanel entityType="import" entityId={r.id} category="settlement" label="💰 정산서류" />
-      </div>
-    </Modal>
   );
 }
 

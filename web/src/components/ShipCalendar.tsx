@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { Icon, Modal, Badge } from "./ui";
-import { AttachmentPanel } from "../pages/TradeModule";
+import ImportDrawer from "./ImportDrawer";
 
 // 선박 일정 캘린더 — 원료 수입 건의 ETD(출항)·ETA(도착)를 달력에 표시하고,
 // 일정을 끌어서 다른 날짜에 놓거나 클릭해서 바로 날짜를 고칠 수 있다.
@@ -202,7 +202,7 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         </Modal>
       )}
 
-      {editing && <EditShipModal row={imports.find((r) => r.id === editing.id) || editing} onClose={() => setEditing(null)} onSave={saveDates} />}
+      {editing && <ImportDrawer row={imports.find((r) => r.id === editing.id) || editing} onClose={() => setEditing(null)} onUpdated={onUpdated} />}
     </div>
   );
 }
@@ -250,47 +250,3 @@ const STATUS_TEXT: Record<string, string> = {
   contracted: "계약", shipped: "선적", customs: "통관", stored: "입고", processed: "가공", released: "출고", settled: "정산",
   arrived: "도착", cleared: "통관완료", delivered: "출고", done: "완료",
 };
-
-// 일정 클릭 → ETD/ETA 날짜 바로 고치기 + 서류 보기
-function EditShipModal({ row, onClose, onSave }: { row: any; onClose: () => void; onSave: (row: any, patch: Partial<Record<Field, string | null>>) => Promise<boolean> }) {
-  const [etd, setEtd] = useState(String(row.etd || "").slice(0, 10));
-  const [eta, setEta] = useState(String(row.eta || "").slice(0, 10));
-  const [busy, setBusy] = useState(false);
-  const changed = etd !== String(row.etd || "").slice(0, 10) || eta !== String(row.eta || "").slice(0, 10);
-
-  async function save() {
-    setBusy(true);
-    const ok = await onSave(row, { etd: etd || null, eta: eta || null });
-    setBusy(false);
-    if (ok) onClose();
-  }
-
-  return (
-    <Modal open onClose={onClose} title={row.material_name} wide>
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
-        <Badge value={row.status} />
-        <span>{row.supplier || "-"}</span>
-        <span>· {row.quantity != null ? `${Number(row.quantity).toLocaleString()} ${row.unit || "MT"}` : "-"}</span>
-        {row.vessel && <span>· {row.vessel}</span>}
-      </div>
-      <div className="flex flex-wrap items-end gap-3 rounded-lg bg-surface-container-low p-3">
-        <label className="text-xs text-on-surface-variant">ETD (출항)
-          <input type="date" className="input mt-1 w-44" value={etd} onChange={(e) => setEtd(e.target.value)} />
-        </label>
-        <span className="pb-2 text-on-surface-variant">→</span>
-        <label className="text-xs text-on-surface-variant">ETA (도착)
-          <input type="date" className="input mt-1 w-44" value={eta} onChange={(e) => setEta(e.target.value)} />
-        </label>
-        <button className="btn-primary" disabled={!changed || busy} onClick={save}>{busy ? "저장 중..." : "날짜 저장"}</button>
-        {etd && eta && eta >= etd && (
-          <span className="pb-2 text-xs text-on-surface-variant">항해 {Math.round((new Date(eta).getTime() - new Date(etd).getTime()) / 86400000)}일</span>
-        )}
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <AttachmentPanel entityType="import" entityId={row.id} category="contract" label="📄 계약서" />
-        <AttachmentPanel entityType="import" entityId={row.id} category="shipping_docs" label="🚢 선적서류" />
-        <AttachmentPanel entityType="import" entityId={row.id} category="settlement" label="💰 정산서류" />
-      </div>
-    </Modal>
-  );
-}
