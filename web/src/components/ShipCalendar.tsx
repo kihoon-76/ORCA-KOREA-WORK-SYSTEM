@@ -108,7 +108,7 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", JSON.stringify({ id: e.row.id, field: e.field })); ev.dataTransfer.effectAllowed = "move"; }}
         onClick={(ev) => { ev.stopPropagation(); setEditing(e.row); }}
         title={`${isEta ? "도착(ETA)" : "출항(ETD)"} · ${e.row.material_name} ${qty}\n${e.row.supplier || ""}\nETD ${md(e.row.etd)} → ETA ${md(e.row.eta)}\n\n클릭: 날짜 수정·서류 보기 / 끌어서 다른 날짜에 놓기: 날짜 변경`}
-        className={`mb-0.5 flex cursor-grab items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] leading-tight active:cursor-grabbing ${
+        className={`mb-0.5 flex cursor-grab items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] leading-tight active:cursor-grabbing ${editing?.id === e.row.id ? "ring-2 ring-amber-400 ring-offset-1 " : ""}${
           isEta ? "bg-primary text-white hover:bg-primary-container" : "border border-secondary-fixed-dim bg-secondary-fixed/60 text-on-secondary-container hover:bg-secondary-fixed"}`}>
         <span className="shrink-0 font-bold">{isEta ? "도착" : "출항"}</span>
         <span className="truncate">{e.row.material_name}</span>
@@ -182,7 +182,14 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         </div>
         <p className="px-6 py-2 text-[11px] text-on-surface-variant">일정을 클릭하면 날짜를 고치거나 서류를 볼 수 있고, 끌어서 다른 날짜에 놓으면 그 날짜로 바뀌어요.</p>
         </div>
-        <UpcomingList imports={imports} today={today} onOpen={setEditing} />
+        {/* 오른쪽 칸: 평소엔 다가오는 일정 목록, 일정을 누르면 그 건의 상세 (캘린더는 그대로 보임) */}
+        {editing ? (
+          <div className="flex h-[640px] flex-col border-t border-outline-variant xl:h-auto xl:max-h-[820px] xl:w-[420px] xl:border-l xl:border-t-0">
+            <ImportDrawer variant="inline" row={imports.find((r) => r.id === editing.id) || editing} onClose={() => setEditing(null)} onUpdated={onUpdated} />
+          </div>
+        ) : (
+          <UpcomingList imports={imports} today={today} onOpen={setEditing} />
+        )}
       </div>
 
       {/* 하루 일정 전체 */}
@@ -202,7 +209,6 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
         </Modal>
       )}
 
-      {editing && <ImportDrawer row={imports.find((r) => r.id === editing.id) || editing} onClose={() => setEditing(null)} onUpdated={onUpdated} />}
     </div>
   );
 }
