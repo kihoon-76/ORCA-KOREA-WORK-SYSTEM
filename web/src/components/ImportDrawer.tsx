@@ -64,11 +64,12 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
   const [etd, setEtd] = useState(d10(row.etd));
   const [eta, setEta] = useState(d10(row.eta));
   const [note, setNote] = useState(row.note || "");
+  const [bl, setBl] = useState(row.bl_no || "");
   const [busy, setBusy] = useState(false);
   const [qualityDraft, setQualityDraft] = useState<Record<string, string> | undefined>(undefined);
 
   useEffect(() => { setEditing(false); setQualityDraft(undefined); }, [row.id]);
-  useEffect(() => { setEtd(d10(r.etd)); setEta(d10(r.eta)); setNote(r.note || ""); }, [r.id, r.etd, r.eta, r.note]);
+  useEffect(() => { setEtd(d10(r.etd)); setEta(d10(r.eta)); setNote(r.note || ""); setBl(r.bl_no || ""); }, [r.id, r.etd, r.eta, r.note, r.bl_no]);
 
   const idx = list ? list.findIndex((x) => x.id === r.id) : -1;
   const prev = idx > 0 ? list![idx - 1] : null;
@@ -115,7 +116,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
   }
   async function saveDates() {
     if (etd && eta && eta < etd && !confirm("ETA(도착)가 ETD(출항)보다 빠릅니다. 그래도 저장할까요?")) return;
-    await put({ etd: etd || null, eta: eta || null });
+    await put({ etd: etd || null, eta: eta || null, bl_no: bl.trim() || null });
   }
   function startEdit() {
     const f: any = {};
@@ -146,7 +147,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
   const todayMs = new Date(new Date().toDateString()).getTime();
   const dday = eta ? Math.round((new Date(eta).getTime() - todayMs) / 86400000) : null;
   const sail = etd && eta && eta >= etd ? Math.round((new Date(eta).getTime() - new Date(etd).getTime()) / 86400000) : null;
-  const datesChanged = etd !== d10(r.etd) || eta !== d10(r.eta);
+  const datesChanged = etd !== d10(r.etd) || eta !== d10(r.eta) || bl.trim() !== (r.bl_no || "");
 
   const info: [string, any][] = [
     ["계약일", md(r.contract_date)], ["구매자(Buyer)", r.lc_bank || "-"],
@@ -194,7 +195,10 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
             <span className="text-on-surface-variant">→</span>
             <span className="text-xs text-on-surface-variant">ETA</span>
             <input type="date" className="input w-40 py-1 text-sm" value={eta} onChange={(e) => setEta(e.target.value)} />
-            {datesChanged && <button className="btn-primary px-3 py-1 text-xs" disabled={busy} onClick={saveDates}>날짜 저장</button>}
+            <span className="ml-2 text-xs text-on-surface-variant">BL</span>
+            <input className="input w-44 py-1 text-sm" placeholder="BL번호 입력" value={bl} onChange={(e) => setBl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && datesChanged) saveDates(); }} />
+            {datesChanged && <button className="btn-primary px-3 py-1 text-xs" disabled={busy} onClick={saveDates}>저장</button>}
             <span className="ml-auto flex gap-3 text-xs">
               {sail != null && <span className="text-on-surface-variant">항해 <b className="text-on-surface">{sail}일</b></span>}
               {dday != null && <b className={dday >= 0 && dday <= 3 ? "text-amber-700" : "text-on-surface"}>{dday > 0 ? `D-${dday}` : dday === 0 ? "오늘 도착" : `도착 후 ${-dday}일`}</b>}
