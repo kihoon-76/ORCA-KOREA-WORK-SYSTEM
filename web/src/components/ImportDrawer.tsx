@@ -47,6 +47,31 @@ const EDIT_FIELDS: { k: string; l: string; type?: string; opts?: string[] }[] = 
 
 type Tab = "" | "info" | "note" | "stage" | "quality" | "price";
 
+// 한눈에 보기 칸 (바로 수정)
+const QUICK_KEYS = ["supplier", "lc_bank", "quantity", "unit", "unit_price", "currency", "incoterms", "payment_type", "etd", "eta", "bl_no"];
+function quickFrom(r: any) {
+  return {
+    supplier: r.supplier ?? "", lc_bank: r.lc_bank ?? "",
+    quantity: r.quantity != null ? String(r.quantity) : "", unit: r.unit || "MT",
+    unit_price: r.unit_price != null ? String(r.unit_price) : "", currency: r.currency || "USD",
+    incoterms: r.incoterms ?? "", payment_type: r.payment_type ?? "",
+    etd: d10(r.etd), eta: d10(r.eta), bl_no: r.bl_no ?? "",
+  } as Record<string, string>;
+}
+// 폭을 따로 주는 칸(단위·통화 선택)은 QBOX, 나머지는 꽉 차게 QIN
+const QBOX = "rounded-md border border-outline-variant/60 bg-white px-2 py-1 text-sm font-semibold text-on-surface hover:border-outline focus:border-primary focus:outline-none";
+const QIN = `w-full ${QBOX}`;
+// 큰 화면(lg)에서 12칸 기준으로 몇 칸 차지할지
+const LG_SPAN: Record<number, string> = { 1: "lg:col-span-1", 2: "lg:col-span-2", 3: "lg:col-span-3" };
+function QF({ label, changed, span = 2, children }: { label: string; changed?: boolean; span?: number; children: React.ReactNode }) {
+  return (
+    <label className={`block min-w-0 ${LG_SPAN[span] || ""}`}>
+      <span className={`mb-0.5 block text-[11px] ${changed ? "font-bold text-amber-800" : "text-on-surface-variant"}`}>{label}{changed ? " •" : ""}</span>
+      {children}
+    </label>
+  );
+}
+
 export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated, onLocate }: {
   row: any;
   list?: any[];                       // 이전/다음으로 넘겨 볼 순서 (날짜순)
@@ -61,15 +86,14 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
   const [tab, setTab] = useState<Tab>("");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
-  const [etd, setEtd] = useState(d10(row.etd));
-  const [eta, setEta] = useState(d10(row.eta));
+  const [q, setQ] = useState<any>(() => quickFrom(row));
+  const setQf = (k: string, v: any) => setQ((p: any) => ({ ...p, [k]: v }));
   const [note, setNote] = useState(row.note || "");
-  const [bl, setBl] = useState(row.bl_no || "");
   const [busy, setBusy] = useState(false);
   const [qualityDraft, setQualityDraft] = useState<Record<string, string> | undefined>(undefined);
 
   useEffect(() => { setEditing(false); setQualityDraft(undefined); }, [row.id]);
-  useEffect(() => { setEtd(d10(r.etd)); setEta(d10(r.eta)); setNote(r.note || ""); setBl(r.bl_no || ""); }, [r.id, r.etd, r.eta, r.note, r.bl_no]);
+  useEffect(() => { setQ(quickFrom(r)); setNote(r.note || ""); }, [r]);
 
   const idx = list ? list.findIndex((x) => x.id === r.id) : -1;
   const prev = idx > 0 ? list![idx - 1] : null;
@@ -114,9 +138,22 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
     }
     await put({ status: v });
   }
-  async function saveDates() {
-    if (etd && eta && eta < etd && !confirm("ETA(도착)가 ETD(출항)보다 빠릅니다. 그래도 저장할까요?")) return;
-    await put({ etd: etd || null, eta: eta || null, bl_no: bl.trim() || null });
+  // 한눈에 보기 칸에서 바꾼 것만 저장
+  const base = quickFrom(r);
+  const changedKeys = QUICK_KEYS.filter((k) => String(q[k] ?? "").trim() !== String(base[k] ?? "").trim());
+  async function saveQuick() {
+    if (q.etd && q.eta && q.eta < q.etd && !confirm("ETA(도착)가 ETD(출항)보다 빠릅니다. 그래도 저장할까요?")) return;
+    const patch: any = {};
+    for (const k of changedKeys) {
+      const v = String(q[k] ?? "").trim();
+      patch[k] = k === "quantity" || k === "unit_price" ? (v === "" ? null : Number(v.replace(/,/g, ""))) : v || null;
+    }
+    if ("quantity" in patch || "unit_price" in patch) {
+      const qq = "quantity" in patch ? patch.quantity : r.quantity;
+      const pp = "unit_price" in patch ? patch.unit_price : r.unit_price;
+      patch.total_price = qq != null && pp != null ? Number(qq) * Number(pp) : null;
+    }
+    await put(patch);
   }
   function startEdit() {
     const f: any = {};
@@ -145,9 +182,11 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
   const si = stageIdx(r.status);
   const total = r.total_price != null ? Number(r.total_price) : r.quantity != null && r.unit_price != null ? Number(r.quantity) * Number(r.unit_price) : null;
   const todayMs = new Date(new Date().toDateString()).getTime();
+  const etd = q.etd, eta = q.eta;
   const dday = eta ? Math.round((new Date(eta).getTime() - todayMs) / 86400000) : null;
   const sail = etd && eta && eta >= etd ? Math.round((new Date(eta).getTime() - new Date(etd).getTime()) / 86400000) : null;
-  const datesChanged = etd !== d10(r.etd) || eta !== d10(r.eta) || bl.trim() !== (r.bl_no || "");
+  const qQty = Number(String(q.quantity).replace(/,/g, "")), qPrice = Number(String(q.unit_price).replace(/,/g, ""));
+  const qTotal = q.quantity !== "" && q.unit_price !== "" && Number.isFinite(qQty) && Number.isFinite(qPrice) ? qQty * qPrice : null;
 
   const info: [string, any][] = [
     ["계약일", md(r.contract_date)], ["구매자(Buyer)", r.lc_bank || "-"],
@@ -159,7 +198,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-primary/40 p-4 backdrop-blur-sm sm:p-8" onClick={onClose}>
-      <div className="card my-4 w-full max-w-4xl rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="card my-4 w-full max-w-5xl rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* 머리: 이전/다음 + 품목 */}
         <div className="flex items-center gap-2 border-b border-outline-variant px-4 py-3">
           {list && (
@@ -174,8 +213,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
               <h2 className="truncate text-lg font-bold text-primary">{r.material_name}</h2>
             </div>
             <div className="truncate text-xs text-on-surface-variant">
-              {r.supplier || "-"} · {r.quantity != null ? `${fmt(r.quantity)} ${r.unit || "MT"}` : "-"}
-              {total != null ? ` · ${r.currency || "USD"} ${fmt(total)}` : ""}{r.lc_bank ? ` · 바이어 ${r.lc_bank}` : ""}
+              계약 {md(r.contract_date)}{r.vessel ? ` · 선박 ${r.vessel}` : ""}{r.lc_no ? ` · LC ${r.lc_no}` : ""}
             </div>
           </div>
           {list && (
@@ -220,21 +258,76 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
             </div>
           )}
 
-          {/* 일정 한 줄 */}
-          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-container-low px-3 py-2 text-sm">
-            <span className="text-xs text-on-surface-variant">ETD</span>
-            <input type="date" className="input w-40 py-1 text-sm" value={etd} onChange={(e) => setEtd(e.target.value)} />
-            <span className="text-on-surface-variant">→</span>
-            <span className="text-xs text-on-surface-variant">ETA</span>
-            <input type="date" className="input w-40 py-1 text-sm" value={eta} onChange={(e) => setEta(e.target.value)} />
-            <span className="ml-2 text-xs text-on-surface-variant">BL</span>
-            <input className="input w-44 py-1 text-sm" placeholder="BL번호 입력" value={bl} onChange={(e) => setBl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && datesChanged) saveDates(); }} />
-            {datesChanged && <button className="btn-primary px-3 py-1 text-xs" disabled={busy} onClick={saveDates}>저장</button>}
-            <span className="ml-auto flex gap-3 text-xs">
-              {sail != null && <span className="text-on-surface-variant">항해 <b className="text-on-surface">{sail}일</b></span>}
-              {dday != null && <b className={dday >= 0 && dday <= 3 ? "text-amber-700" : "text-on-surface"}>{dday > 0 ? `D-${dday}` : dday === 0 ? "오늘 도착" : `도착 후 ${-dday}일`}</b>}
-            </span>
+          {/* 핵심 정보 — 한눈에 보고 바로 고치기 (바꾸면 저장 버튼이 나타남) */}
+          <div className={`rounded-lg p-3 ${changedKeys.length ? "bg-amber-50 ring-1 ring-amber-300" : "bg-surface-container-low"}`}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4 lg:grid-cols-12">
+              <QF label="공급사(Seller)" changed={changedKeys.includes("supplier")}>
+                <input className={QIN} value={q.supplier} onChange={(e) => setQf("supplier", e.target.value)} />
+              </QF>
+              <QF label="구매자(Buyer)" changed={changedKeys.includes("lc_bank")}>
+                <input className={QIN} value={q.lc_bank} onChange={(e) => setQf("lc_bank", e.target.value)} />
+              </QF>
+              <QF label="물량" changed={changedKeys.includes("quantity") || changedKeys.includes("unit")}>
+                <div className="flex gap-1">
+                  <input className={`${QBOX} min-w-0 flex-1 text-right`} inputMode="decimal" value={q.quantity} onChange={(e) => setQf("quantity", e.target.value)} />
+                  <select className={`${QBOX} w-[60px] shrink-0 px-1`} value={q.unit} onChange={(e) => setQf("unit", e.target.value)}>
+                    {["MT", "KG"].map((o) => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+              </QF>
+              <QF label="단가" changed={changedKeys.includes("unit_price") || changedKeys.includes("currency")}>
+                <div className="flex gap-1">
+                  <select className={`${QBOX} w-[72px] shrink-0 px-1`} value={q.currency} onChange={(e) => setQf("currency", e.target.value)}>
+                    {["USD", "KRW", "EUR", "CNY"].map((o) => <option key={o}>{o}</option>)}
+                  </select>
+                  <input className={`${QBOX} min-w-0 flex-1 text-right`} inputMode="decimal" value={q.unit_price} onChange={(e) => setQf("unit_price", e.target.value)} />
+                </div>
+              </QF>
+              <QF label="총액">
+                <div className="px-2 py-1 text-sm font-bold text-primary">{qTotal != null ? `${q.currency} ${fmt(qTotal)}` : "-"}</div>
+              </QF>
+              <QF label="Incoterms" span={1} changed={changedKeys.includes("incoterms")}>
+                <select className={QIN} value={q.incoterms} onChange={(e) => setQf("incoterms", e.target.value)}>
+                  {["", "FOB", "CFR", "CIF"].map((o) => <option key={o} value={o}>{o || "-"}</option>)}
+                  {q.incoterms && !["FOB", "CFR", "CIF"].includes(q.incoterms) && <option value={q.incoterms}>{q.incoterms}</option>}
+                </select>
+              </QF>
+              <QF label="결제" span={1} changed={changedKeys.includes("payment_type")}>
+                <select className={QIN} value={q.payment_type} onChange={(e) => setQf("payment_type", e.target.value)}>
+                  {["", "LC", "TT"].map((o) => <option key={o} value={o}>{o || "-"}</option>)}
+                  {q.payment_type && !["LC", "TT"].includes(q.payment_type) && <option value={q.payment_type}>{q.payment_type}</option>}
+                </select>
+              </QF>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-outline-variant/70 pt-3 sm:grid-cols-4 lg:grid-cols-12">
+              <QF label="ETD (출항)" changed={changedKeys.includes("etd")}>
+                <input type="date" className={QIN} value={q.etd} onChange={(e) => setQf("etd", e.target.value)} />
+              </QF>
+              <QF label="ETA (도착)" changed={changedKeys.includes("eta")}>
+                <input type="date" className={QIN} value={q.eta} onChange={(e) => setQf("eta", e.target.value)} />
+              </QF>
+              <QF label="BL번호" changed={changedKeys.includes("bl_no")} span={3}>
+                <input className={QIN} placeholder="BL번호 입력" value={q.bl_no} onChange={(e) => setQf("bl_no", e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && changedKeys.length) saveQuick(); }} />
+              </QF>
+              <QF label="항해 · 도착">
+                <div className="px-2 py-1 text-sm">
+                  {sail != null ? <span className="text-on-surface-variant">{sail}일 · </span> : null}
+                  {dday != null ? <b className={dday >= 0 && dday <= 3 ? "text-amber-700" : "text-on-surface"}>{dday > 0 ? `D-${dday}` : dday === 0 ? "오늘" : `도착 후 ${-dday}일`}</b> : <span className="text-on-surface-variant">-</span>}
+                </div>
+              </QF>
+              <div className="col-span-2 flex items-end justify-end gap-2 lg:col-span-3">
+                {changedKeys.length > 0 ? (
+                  <>
+                    <span className="pb-1.5 text-xs text-amber-800">{changedKeys.length}개 바뀜</span>
+                    <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setQ(quickFrom(r))}>되돌리기</button>
+                    <button className="btn-primary px-4 py-1.5 text-xs" disabled={busy} onClick={saveQuick}>저장</button>
+                  </>
+                ) : (
+                  <span className="pb-1.5 text-[11px] text-on-surface-variant">칸을 눌러 바로 고칠 수 있어요</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* 서류 3칸 — 바로 보임 */}
