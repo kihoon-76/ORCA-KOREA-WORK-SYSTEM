@@ -21,7 +21,9 @@ const md = (v?: string | null) => {
 };
 const MAX_PER_DAY = 3;
 
-export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; onUpdated: (item: any) => void }) {
+export default function ShipCalendar({ imports, onUpdated, onCreated }: { imports: any[]; onUpdated: (item: any) => void; onCreated?: (item: any) => void }) {
+  // 빈 날짜 칸을 누르면 그 날짜로 새 수입 건 등록
+  const [newDate, setNewDate] = useState<string | null>(null);
   const today = ymd(new Date());
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [editing, setEditing] = useState<any>(null);
@@ -166,15 +168,17 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
                     onDragOver={(ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; if (dragOver !== key) setDragOver(key); }}
                     onDragLeave={() => setDragOver((k) => (k === key ? null : k))}
                     onDrop={(ev) => { ev.preventDefault(); onDrop(key, ev.dataTransfer.getData("text/plain")); }}
-                    className={`min-h-[104px] border-b border-r border-outline-variant p-1 transition-colors ${inMonth ? "bg-surface-container-lowest" : "bg-surface-container-low/60"} ${dragOver === key ? "!bg-secondary-fixed/50 ring-2 ring-inset ring-secondary" : ""}`}>
+                    onClick={() => setNewDate(key)} title="빈 곳을 누르면 이 날짜로 새 수입 건 등록"
+                    className={`group min-h-[104px] cursor-pointer border-b border-r border-outline-variant p-1 transition-colors hover:bg-secondary-fixed/20 ${inMonth ? "bg-surface-container-lowest" : "bg-surface-container-low/60"} ${dragOver === key ? "!bg-secondary-fixed/50 ring-2 ring-inset ring-secondary" : ""}`}>
                     <div className="mb-0.5 flex items-center justify-between">
                       <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-secondary font-bold text-white" : inMonth ? (d.getDay() === 0 ? "text-error" : "text-on-surface") : "text-on-surface-variant/50"}`}>
                         {d.getDate()}
                       </span>
+                      <span className="mr-1 hidden text-[11px] font-semibold text-secondary group-hover:inline">+ 새 건</span>
                     </div>
                     {events.slice(0, MAX_PER_DAY).map(chip)}
                     {events.length > MAX_PER_DAY && (
-                      <button className="w-full rounded px-1 text-left text-[11px] font-semibold text-secondary hover:bg-surface-container" onClick={() => setDayList(key)}>
+                      <button className="w-full rounded px-1 text-left text-[11px] font-semibold text-secondary hover:bg-surface-container" onClick={(ev) => { ev.stopPropagation(); setDayList(key); }}>
                         +{events.length - MAX_PER_DAY}건 더보기
                       </button>
                     )}
@@ -193,6 +197,12 @@ export default function ShipCalendar({ imports, onUpdated }: { imports: any[]; o
       {editing && (
         <ImportDrawer row={imports.find((r) => r.id === editing.id) || editing} list={navList}
           onNavigate={setEditing} onClose={() => setEditing(null)} onUpdated={onUpdated} />
+      )}
+
+      {/* 새 수입 건 등록 (캘린더에서) */}
+      {newDate && (
+        <NewImportModal date={newDate} imports={imports} onClose={() => setNewDate(null)}
+          onCreated={(item) => { setNewDate(null); onCreated?.(item); setEditing(item); }} />
       )}
 
       {/* 하루 일정 전체 */}
@@ -259,3 +269,100 @@ const STATUS_TEXT: Record<string, string> = {
   contracted: "계약", shipped: "선적", customs: "통관", stored: "입고", processed: "가공", released: "출고", settled: "정산",
   arrived: "도착", cleared: "통관완료", delivered: "출고", done: "완료",
 };
+
+// ───────────── 캘린더에서 새 수입 건 등록 ─────────────
+// 누른 날짜를 ETA(도착) 또는 ETD(출항)로 넣고, 비슷한 기존 계약을 골라 내용을 복제해 채울 수도 있다.
+function NewImportModal({ date, imports, onClose, onCreated }: { date: string; imports: any[]; onClose: () => void; onCreated: (item: any) => void }) {
+  const today = ymd(new Date());
+  const [as, setAs] = useState<"eta" | "etd">("eta");
+  const [f, setF] = useState<any>({ contract_date: today, unit: "MT", currency: "USD", incoterms: "", payment_type: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
+  const recent = useMemo(() => [...imports].sort((a, b) => String(b.contract_date || "").localeCompare(String(a.contract_date || ""))).slice(0, 60), [imports]);
+
+  function copyFrom(id: string) {
+    const src = imports.find((r) => String(r.id) === id);
+    if (!src) return;
+    setF((p: any) => ({
+      ...p,
+      material_name: src.material_name || "", supplier: src.supplier || "", lc_bank: src.lc_bank || "",
+      quantity: src.quantity ?? "", unit: src.unit || "MT", unit_price: src.unit_price ?? "", currency: src.currency || "USD",
+      incoterms: src.incoterms || "", payment_type: src.payment_type || "",
+    }));
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      const num = (v: any) => (v === "" || v == null ? null : Number(String(v).replace(/,/g, "")));
+      const body: any = {
+        contract_date: f.contract_date || null, material_name: f.material_name, supplier: f.supplier || null, lc_bank: f.lc_bank || null,
+        quantity: num(f.quantity), unit: f.unit, unit_price: num(f.unit_price), currency: f.currency,
+        incoterms: f.incoterms || null, payment_type: f.payment_type || null,
+        etd: as === "etd" ? date : f.etd || null, eta: as === "eta" ? date : f.eta || null,
+      };
+      const res = await api.post("/trade/imports", body);
+      onCreated(res.item);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input = "input py-1.5 text-sm";
+  return (
+    <Modal open onClose={onClose} title={`${md(date)} 새 수입 건 등록`} wide>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-container-low px-3 py-2 text-sm">
+          <span className="text-on-surface-variant">{md(date)}을(를)</span>
+          {(["eta", "etd"] as const).map((k) => (
+            <button key={k} onClick={() => setAs(k)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${as === k ? "border-primary bg-primary text-white" : "border-outline-variant bg-white text-on-surface-variant"}`}>
+              {k === "eta" ? "도착일(ETA)" : "출항일(ETD)"}
+            </button>
+          ))}
+          <span className="text-on-surface-variant">로 넣기</span>
+        </div>
+        <label className="block text-xs text-on-surface-variant">비슷한 계약에서 복제해 채우기 (선택)
+          <select className={`${input} mt-1`} defaultValue="" onChange={(e) => copyFrom(e.target.value)}>
+            <option value="">— 직접 입력 —</option>
+            {recent.map((r) => <option key={r.id} value={r.id}>{r.contract_date || ""} · {r.material_name} · {r.supplier || "-"} · {r.quantity ?? "-"}{r.unit || "MT"} · {r.currency || ""} {r.unit_price ?? ""}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <label className="text-xs text-on-surface-variant">원료명 *<input className={`${input} mt-1`} value={f.material_name || ""} onChange={(e) => set("material_name", e.target.value)} /></label>
+          <label className="text-xs text-on-surface-variant">공급사(Seller)<input className={`${input} mt-1`} value={f.supplier || ""} onChange={(e) => set("supplier", e.target.value)} /></label>
+          <label className="text-xs text-on-surface-variant">구매자(Buyer)<input className={`${input} mt-1`} value={f.lc_bank || ""} onChange={(e) => set("lc_bank", e.target.value)} /></label>
+          <label className="text-xs text-on-surface-variant">물량
+            <div className="mt-1 flex gap-1">
+              <input className={`${input} min-w-0 flex-1`} inputMode="decimal" value={f.quantity ?? ""} onChange={(e) => set("quantity", e.target.value)} />
+              <select className={`${input} w-20`} value={f.unit} onChange={(e) => set("unit", e.target.value)}><option>MT</option><option>KG</option></select>
+            </div>
+          </label>
+          <label className="text-xs text-on-surface-variant">단가
+            <div className="mt-1 flex gap-1">
+              <select className={`${input} w-20`} value={f.currency} onChange={(e) => set("currency", e.target.value)}>{["USD", "KRW", "EUR", "CNY"].map((c) => <option key={c}>{c}</option>)}</select>
+              <input className={`${input} min-w-0 flex-1`} inputMode="decimal" value={f.unit_price ?? ""} onChange={(e) => set("unit_price", e.target.value)} />
+            </div>
+          </label>
+          <label className="text-xs text-on-surface-variant">계약일<input type="date" className={`${input} mt-1`} value={f.contract_date || ""} onChange={(e) => set("contract_date", e.target.value)} /></label>
+          <label className="text-xs text-on-surface-variant">Incoterms
+            <select className={`${input} mt-1`} value={f.incoterms} onChange={(e) => set("incoterms", e.target.value)}>{["", "FOB", "CFR", "CIF"].map((o) => <option key={o} value={o}>{o || "-"}</option>)}</select>
+          </label>
+          <label className="text-xs text-on-surface-variant">결제
+            <select className={`${input} mt-1`} value={f.payment_type} onChange={(e) => set("payment_type", e.target.value)}>{["", "LC", "TT"].map((o) => <option key={o} value={o}>{o || "-"}</option>)}</select>
+          </label>
+          {as === "eta"
+            ? <label className="text-xs text-on-surface-variant">ETD (출항, 선택)<input type="date" className={`${input} mt-1`} value={f.etd || ""} onChange={(e) => set("etd", e.target.value)} /></label>
+            : <label className="text-xs text-on-surface-variant">ETA (도착, 선택)<input type="date" className={`${input} mt-1`} value={f.eta || ""} onChange={(e) => set("eta", e.target.value)} /></label>}
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <span className="mr-auto text-xs text-on-surface-variant">등록하면 바로 상세 창이 열려서 서류를 올릴 수 있어요</span>
+          <button className="btn-secondary" onClick={onClose}>취소</button>
+          <button className="btn-primary" disabled={!f.material_name || busy} onClick={save}>{busy ? "등록 중..." : "등록"}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

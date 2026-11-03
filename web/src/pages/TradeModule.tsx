@@ -916,6 +916,18 @@ export default function TradeModule({ config }: { config: Config }) {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   function openNew() { setRow({ unit: "MT", currency: "USD" }); setOpen(true); }
+  // 비슷한 계약 복제: 원료·거래처·물량·단가·조건은 그대로, 날짜·BL·LC번호는 비우고 계약일은 오늘로
+  function openCopy(r: any) {
+    const t = new Date();
+    const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    setRow({
+      _copyOf: r.material_name,
+      contract_date: today, material_name: r.material_name, [config.partnerKey]: r[config.partnerKey], lc_bank: r.lc_bank,
+      quantity: r.quantity ?? "", unit: r.unit || "MT", unit_price: r.unit_price ?? "", currency: r.currency || "USD",
+      incoterms: r.incoterms || "", payment_type: r.payment_type || "", note: r.note || "",
+    });
+    setOpen(true);
+  }
 
   async function save() {
     const body: any = {
@@ -1033,7 +1045,7 @@ export default function TradeModule({ config }: { config: Config }) {
               <col style={{ width: 138 }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 98 }} />
-              <col style={{ width: 36 }} />
+              <col style={{ width: 58 }} />
             </colgroup>
             <thead><tr className="bg-slate-50">
               <SortHeader label="계약일자" active={dateSort?.key === "contract_date"} dir={dateSort?.key === "contract_date" ? dateSort.dir : null} onClick={() => toggleDateSort("contract_date")} />
@@ -1102,6 +1114,9 @@ export default function TradeModule({ config }: { config: Config }) {
                         <td className="td overflow-hidden px-1"><CompactDateCell value={r.etd} onCommit={(v) => commitField(r, "etd", v)} showWeekday /></td>
                         <td className="td overflow-hidden px-1"><CompactDateCell value={r.eta} onCommit={(v) => commitField(r, "eta", v)} showWeekday /></td>
                         <td className="td text-right whitespace-nowrap px-1">
+                          <button className="mr-1.5 text-xs text-slate-400 hover:text-brand-600" onClick={(e) => { e.stopPropagation(); openCopy(r); }} title="이 계약 복제해서 새로 등록">
+                            <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                          </button>
                           <button className="text-xs text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); remove(r); }} title="삭제">
                             <span className="material-symbols-outlined text-[16px]">delete</span>
                           </button>
@@ -1181,7 +1196,7 @@ export default function TradeModule({ config }: { config: Config }) {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="신규 등록" wide>
+      <Modal open={open} onClose={() => setOpen(false)} title={row?._copyOf ? `복제해서 새로 등록 — ${row._copyOf}` : "신규 등록"} wide>
         {row && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1210,6 +1225,7 @@ export default function TradeModule({ config }: { config: Config }) {
               <Field label="ETA (도착)"><input type="date" className="input" value={row.eta || ""} onChange={(e) => setRow({ ...row, eta: e.target.value })} /></Field>
             </div>
             <Field label="비고"><textarea className="input" rows={2} value={row.note || ""} onChange={(e) => setRow({ ...row, note: e.target.value })} /></Field>
+            {row._copyOf && <p className="rounded bg-brand-50 px-3 py-2 text-xs text-brand-700">기존 계약 내용을 복사해 왔어요. 계약일·물량·단가·ETD/ETA 등 달라진 부분만 고쳐서 등록하세요. (BL·LC번호, 서류는 복사되지 않아요)</p>}
             <p className="text-xs text-slate-400">등록 후 목록에서 행을 클릭하면 계약서·선적서류를 바로 첨부할 수 있어요.</p>
             <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={() => setOpen(false)}>취소</button>

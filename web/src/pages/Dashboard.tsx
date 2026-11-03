@@ -106,7 +106,8 @@ export default function Dashboard() {
 
       {/* 선박 일정 캘린더 — ETD(출항)·ETA(도착)를 달력으로, 끌어서/클릭해서 날짜 수정 */}
       <div className="card overflow-hidden">
-        <ShipCalendar imports={imports} onUpdated={(item) => setImports((prev) => prev.map((x) => (x.id === item.id ? item : x)))} />
+        <ShipCalendar imports={imports} onUpdated={(item) => setImports((prev) => prev.map((x) => (x.id === item.id ? item : x)))}
+          onCreated={(item) => setImports((prev) => [item, ...prev])} />
       </div>
 
       {/* 결재 대기 + 수입 지도 미니 보기 */}
