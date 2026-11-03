@@ -184,10 +184,42 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
               다음 <Icon name="chevron_right" size={18} />
             </button>
           )}
-          <button className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-surface-container" onClick={onClose} title="닫기 (Esc)"><Icon name="close" size={18} /></button>
+          <button className={`ml-1 flex h-8 shrink-0 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold ${editing ? "border-primary bg-primary text-white" : "border-outline-variant text-primary hover:bg-surface-container"}`}
+            onClick={() => (editing ? setEditing(false) : startEdit())} title="품목명·수량·단가 등 정보 수정">
+            <Icon name="edit" size={16} /> {editing ? "수정 중" : "정보 수정"}
+          </button>
+          <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-surface-container" onClick={onClose} title="닫기 (Esc)"><Icon name="close" size={18} /></button>
         </div>
 
         <div className="space-y-3 p-4">
+          {/* 정보 수정 — 머리의 "정보 수정"을 누르면 맨 위에 열림 */}
+          {editing && (
+            <div className="rounded-lg border-2 border-primary/30 bg-primary-fixed/20 p-3">
+              <div className="mb-2 text-xs font-bold text-primary">✏️ 정보 수정 <span className="font-normal text-on-surface-variant">— 고친 뒤 저장을 누르면 원료 수입현황에도 바로 반영돼요</span></div>
+                <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {EDIT_FIELDS.map((x) => (
+                    <label key={x.k} className="text-[11px] text-on-surface-variant">{x.l}
+                      {x.opts ? (
+                        <select className="input mt-0.5 py-1 text-sm" value={form[x.k] ?? ""} onChange={(e) => setForm({ ...form, [x.k]: e.target.value })}>
+                          {x.opts.map((o) => <option key={o} value={o}>{o || "-"}</option>)}
+                          {form[x.k] && !x.opts.includes(form[x.k]) && <option value={form[x.k]}>{form[x.k]}</option>}
+                        </select>
+                      ) : (
+                        <input type={x.type === "date" ? "date" : "text"} inputMode={x.type === "number" ? "decimal" : undefined}
+                          className="input mt-0.5 py-1 text-sm" value={form[x.k] ?? ""} onChange={(e) => setForm({ ...form, [x.k]: e.target.value })} />
+                      )}
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-2 flex justify-end gap-2">
+                  <button className="btn-secondary px-3 py-1 text-xs" onClick={() => setEditing(false)}>취소</button>
+                  <button className="btn-primary px-3 py-1 text-xs" disabled={busy} onClick={saveEdit}>저장</button>
+                </div>
+              </>
+            </div>
+          )}
+
           {/* 일정 한 줄 */}
           <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-container-low px-3 py-2 text-sm">
             <span className="text-xs text-on-surface-variant">ETD</span>
@@ -226,7 +258,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
             </span>
           </div>
 
-          {tab === "info" && (
+          {tab === "info" && !editing && (
             <div className="rounded-lg border border-outline-variant p-3">
               {!editing ? (
                 <>
@@ -241,27 +273,7 @@ export default function ImportDrawer({ row, list, onNavigate, onClose, onUpdated
                   <button className="mt-2 text-xs font-semibold text-secondary hover:underline" onClick={startEdit}>✏️ 수정</button>
                 </>
               ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {EDIT_FIELDS.map((x) => (
-                      <label key={x.k} className="text-[11px] text-on-surface-variant">{x.l}
-                        {x.opts ? (
-                          <select className="input mt-0.5 py-1 text-sm" value={form[x.k] ?? ""} onChange={(e) => setForm({ ...form, [x.k]: e.target.value })}>
-                            {x.opts.map((o) => <option key={o} value={o}>{o || "-"}</option>)}
-                            {form[x.k] && !x.opts.includes(form[x.k]) && <option value={form[x.k]}>{form[x.k]}</option>}
-                          </select>
-                        ) : (
-                          <input type={x.type === "date" ? "date" : "text"} inputMode={x.type === "number" ? "decimal" : undefined}
-                            className="input mt-0.5 py-1 text-sm" value={form[x.k] ?? ""} onChange={(e) => setForm({ ...form, [x.k]: e.target.value })} />
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex justify-end gap-2">
-                    <button className="btn-secondary px-3 py-1 text-xs" onClick={() => setEditing(false)}>취소</button>
-                    <button className="btn-primary px-3 py-1 text-xs" disabled={busy} onClick={saveEdit}>저장</button>
-                  </div>
-                </>
+                null
               )}
             </div>
           )}
