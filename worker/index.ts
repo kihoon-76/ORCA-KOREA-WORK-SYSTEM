@@ -21,6 +21,7 @@ import fxRoutes from "./routes/fx";
 import settleRoutes from "./routes/settle";
 import stockRoutes from "./routes/stock";
 import planRoutes from "./routes/plan";
+import docsRoutes from "./routes/docs";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -45,6 +46,7 @@ api.route("/fx", fxRoutes);
 api.route("/settle", settleRoutes);
 api.route("/stock", stockRoutes);
 api.route("/plan", planRoutes);
+api.route("/docs", docsRoutes);
 
 // 대시보드 요약
 api.get("/dashboard", authMiddleware, async (c) => {
