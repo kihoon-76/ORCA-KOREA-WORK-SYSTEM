@@ -14,6 +14,7 @@ import PaymentNotice from "./components/PaymentNotice";
 import Imports from "./pages/Imports";
 import Exports from "./pages/Exports";
 import Inventory from "./pages/Inventory";
+import Stock from "./pages/Stock";
 import Materials from "./pages/Materials";
 import Trips from "./pages/Trips";
 import TripReports from "./pages/TripReports";
@@ -31,6 +32,7 @@ interface NavItem { to: string; label: string; icon: string; roles?: string[] }
 const MAIN_NAV: NavItem[] = [
   { to: "/", label: "대시보드", icon: "dashboard" },
   { to: "/imports", label: "원료 수입현황", icon: "sailing" },
+  { to: "/stock", label: "입출고 · 재고", icon: "inventory_2" },
   { to: "/import-map", label: "수입 지도 현황판", icon: "public" },
   { to: "/settlements", label: "정산 관리", icon: "receipt_long" },
   { to: "/approvals", label: "전자결재", icon: "approval" },
@@ -50,7 +52,7 @@ const MORE_NAV: { group: string; items: NavItem[] }[] = [
   ]},
   { group: "Trade & Logistics", items: [
     { to: "/exports", label: "원료 수출현황", icon: "local_shipping" },
-    { to: "/inventory", label: "재고관리", icon: "inventory_2" },
+    { to: "/inventory", label: "재고관리(이전)", icon: "inventory" },
     { to: "/materials", label: "원료 / 분석결과", icon: "science" },
     { to: "/calc-settings", label: "기준정보 설정", icon: "tune" },
   ]},
@@ -223,6 +225,7 @@ export default function App() {
         <Route path="/settlements" element={<Suspense fallback={<Spinner />}><Settlements /></Suspense>} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
+        <Route path="/stock" element={<Stock />} />
         <Route path="/materials" element={<Materials />} />
         <Route path="/calc-settings" element={<CalcSettings />} />
         <Route path="/trips" element={<Trips />} />
