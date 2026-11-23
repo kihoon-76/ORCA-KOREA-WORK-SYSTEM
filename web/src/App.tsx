@@ -16,6 +16,7 @@ import Exports from "./pages/Exports";
 import Inventory from "./pages/Inventory";
 import Stock from "./pages/Stock";
 import Plan from "./pages/Plan";
+import Flow from "./pages/Flow";
 import Materials from "./pages/Materials";
 import Trips from "./pages/Trips";
 import TripReports from "./pages/TripReports";
@@ -41,6 +42,7 @@ const MAIN_NAV: NavItem[] = [
 ];
 const MORE_NAV: { group: string; items: NavItem[] }[] = [
   { group: "Workspace", items: [
+    { to: "/flow", label: "업무 흐름", icon: "account_tree" },
     { to: "/tasks", label: "업무 / 할일", icon: "task_alt" },
     { to: "/calendar", label: "일정 / 캘린더", icon: "calendar_month" },
     { to: "/attendance", label: "근태 / 출퇴근", icon: "schedule" },
@@ -223,6 +225,7 @@ export default function App() {
         <Route path="/imports" element={<Imports />} />
         <Route path="/import-map" element={<Navigate to="/imports?view=map" replace />} />
         <Route path="/plan" element={<Plan />} />
+        <Route path="/flow" element={<Flow />} />
         <Route path="/settlements" element={<Suspense fallback={<Spinner />}><Settlements /></Suspense>} />
         <Route path="/exports" element={<Exports />} />
         <Route path="/inventory" element={<Inventory />} />
