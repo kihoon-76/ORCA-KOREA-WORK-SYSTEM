@@ -128,9 +128,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="headline text-3xl font-bold tracking-tight text-primary">대시보드</h1>
-        <p className="text-on-surface-variant">안녕하세요, {user!.name}님.</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="headline text-3xl font-bold tracking-tight text-primary">대시보드</h1>
+          <p className="text-on-surface-variant">안녕하세요, {user!.name}님.</p>
+        </div>
+        <Link to="/flow" className="flex items-center gap-1 text-sm font-semibold text-secondary hover:underline"><Icon name="account_tree" size={18} /> 우리 회사 업무 흐름</Link>
       </div>
 
       {/* 핵심 숫자 4개 */}
