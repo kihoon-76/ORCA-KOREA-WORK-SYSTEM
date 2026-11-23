@@ -5,18 +5,18 @@ import ShipCalendar from "../components/ShipCalendar";
 import { api } from "../api";
 import { PageHeader, Spinner, Icon } from "../components/ui";
 
-// 원료 수입현황 — 목록 / 선박일정(캘린더) / 지도 를 한 페이지에서 탭으로 본다
+// 원료 수입현황 — 선박일정(기본) / 목록 / 지도 를 한 페이지에서 탭으로 본다
 const ImportMap = lazy(() => import("./ImportMap"));
 const VIEWS = [
-  { key: "list", label: "목록", icon: "view_list" },
   { key: "calendar", label: "선박일정", icon: "calendar_month" },
+  { key: "list", label: "목록", icon: "view_list" },
   { key: "map", label: "지도", icon: "public" },
 ] as const;
 
 export default function Imports() {
   const [params, setParams] = useSearchParams();
-  const view = (params.get("view") as "list" | "calendar" | "map") || "list";
-  const setView = (v: string) => setParams(v === "list" ? {} : { view: v }, { replace: true });
+  const view = (params.get("view") as "list" | "calendar" | "map") || "calendar";
+  const setView = (v: string) => setParams(v === "calendar" ? {} : { view: v }, { replace: true });
 
   return (
     <div>

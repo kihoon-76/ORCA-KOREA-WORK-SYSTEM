@@ -4,10 +4,11 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { Spinner, Icon } from "../components/ui";
 import FxCard from "../components/FxCard";
-import { CUSTOMERS, addMonths, customerOf, supplyPrice, won, ym } from "../planCalc";
+import ShipCalendar from "../components/ShipCalendar";
+import { addMonths, ym } from "../planCalc";
 
-// 대시보드 — 오르카 업무 흐름(입찰 → 납품계획 → 구매 → 입출고·재고 → 재무)을 한눈에.
-// 그 아래에 이번 달·다음 달 원료 부족 경고와, 지금 챙겨야 할 일 목록, 환율.
+// 대시보드 — 핵심 숫자 4개(원료 확보·재고·입항 예정·처리 대기) → 선박 일정 → 할 일 → 환율.
+// 자세한 내용은 각 메뉴에서 본다.
 
 const IN_TRANSIT = new Set(["shipped", "arrived", "customs"]);
 const NOT_RECEIVED = new Set(["contracted", "shipped", "arrived", "customs"]);
@@ -110,133 +111,69 @@ export default function Dashboard() {
   if (!imports) return <Spinner />;
 
   const m = Number(now.slice(5));
-  const thisPlans = calc.plansOf(now);
-  const bidLines = [...calc.latestBid.values()].map((b) => {
-    const ours = b.results.filter((r: any) => customerOf(r.company));
-    const period = b.period_from ? `${Number(b.period_from.slice(5, 7))}~${Number((b.period_to || "").slice(5, 7))}월` : "";
-    return { key: b.id, label: `${b.plant} ${period}`, ours };
-  });
-
-  const steps = [
-    {
-      no: 1, title: "입찰", icon: "gavel", to: "/plan",
-      main: bidLines.length ? `${bidLines.length}개 발전소` : "입력 전",
-      lines: bidLines.length ? bidLines.map((b) => `${b.label}: ${b.ours.length ? b.ours.map((r: any) => `${customerOf(r.company)} ${r.status || ""}${r.price_l ? ` ${won(r.price_l, 0)}원/L` : ""}`).join(", ") : "우리 납품처 결과 없음"}`) : ["남부·중부 입찰 결과를 넣어주세요"],
-      warn: !bidLines.length,
-    },
-    {
-      no: 2, title: `${m}월 납품계획`, icon: "edit_calendar", to: "/plan",
-      main: thisPlans.length ? `${fmt(calc.need(now))} MT` : "미입력",
-      lines: thisPlans.length
-        ? CUSTOMERS.map((c) => { const p = thisPlans.find((x) => x.customer === c.key); return p ? `${c.key} ${fmt(n(p.qty_mt))}MT${p.price_l ? ` · 납품가 ${won(supplyPrice(p.price_l, p.freight), 0)}원/kg` : ""}` : `${c.key} -`; })
-        : ["대표님께 받은 수량·가격을 넣어주세요"],
-      warn: !thisPlans.length,
-    },
-    {
-      no: 3, title: "구매 · 선적", icon: "sailing", to: "/imports",
-      main: `${fmt(calc.etaMonth.reduce((a, r) => a + n(r.quantity), 0))} MT`,
-      lines: [`${m}월 도착 예정 ${calc.etaMonth.length}건`, `이동 중 ${calc.transit.length}건 · ${fmt(calc.transit.reduce((a, r) => a + n(r.quantity), 0))}MT`, `계약(선적 전) ${calc.contracted.length}건`],
-    },
-    {
-      no: 4, title: "입출고 · 재고", icon: "inventory_2", to: "/stock",
-      main: `${fmt(calc.stockMt)} MT`,
-      lines: ["현재 재고 (공장 미투입)", `공장투입 진행 ${fmt(calc.doingMt)}MT`, `${m}월 출고 ${fmt(calc.outMonth)}MT`],
-    },
-    {
-      no: 5, title: "재무 · 정산", icon: "receipt_long", to: "/settlements",
-      main: `${calc.openSettle.length}건`,
-      lines: ["정산 진행 중 (최종 확인 전)", `결제 예정 14일 내 ${calc.dueSoon.length}건`, `내 결재 차례 ${inbox.length}건`],
-      warn: calc.dueSoon.length > 0 || inbox.length > 0,
-    },
+  const need = calc.need(now);
+  const arrivingMt = calc.etaMonth.reduce((a, r) => a + n(r.quantity), 0);
+  const waiting = inbox.length + calc.dueSoon.length;
+  const tiles = [
+    need
+      ? { label: `${m}월 원료 확보`, value: calc.gapNow < 0 ? `부족 ${fmt(-calc.gapNow)}` : `여유 ${fmt(calc.gapNow)}`, unit: "MT",
+          sub: `납품 ${fmt(need)} · 확보 ${fmt(calc.haveNow)} MT`, tone: calc.gapNow < 0 ? "red" : "green", to: "/plan" }
+      : { label: `${m}월 원료 확보`, value: "납품계획 미입력", unit: "", sub: "입력하면 부족분을 계산해요", tone: "amber", to: "/plan" },
+    { label: "현재 재고", value: fmt(calc.stockMt), unit: "MT", sub: `공장투입 진행 ${fmt(calc.doingMt)} MT`, tone: "plain", to: "/stock" },
+    { label: `${m}월 입항 예정`, value: fmt(arrivingMt), unit: "MT", sub: `${calc.etaMonth.length}건 · 이동 중 ${calc.transit.length}건`, tone: "plain", to: "/imports" },
+    { label: "처리 대기", value: `${waiting}`, unit: "건", sub: `결재 ${inbox.length} · 정산 결제 임박 ${calc.dueSoon.length}`, tone: waiting ? "amber" : "plain", to: inbox.length ? "/approvals" : "/settlements" },
   ];
+  const TONE: Record<string, string> = { red: "text-error", green: "text-success", amber: "text-amber-700", plain: "text-primary" };
+  const shown = todos.slice(0, 6);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="headline text-3xl font-bold tracking-tight text-primary">대시보드</h1>
-        <p className="text-on-surface-variant">안녕하세요, {user!.name}님. 입찰부터 정산까지 오르카 업무 흐름이에요.</p>
+        <p className="text-on-surface-variant">안녕하세요, {user!.name}님.</p>
       </div>
 
-      {/* 업무 흐름 */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {steps.map((s, i) => (
-          <Link key={s.no} to={s.to} className={`card relative flex flex-col p-4 transition-all hover:shadow-md ${s.warn ? "border-amber-400" : ""}`}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-on-primary">{s.no}</span>
-              <span className="font-bold text-primary">{s.title}</span>
-              <Icon name={s.icon} className="ml-auto text-on-surface-variant" size={20} />
-            </div>
-            <div className={`headline text-2xl font-bold ${s.warn ? "text-amber-700" : "text-primary"}`}>{s.main}</div>
-            <div className="mt-1 space-y-0.5 text-xs text-on-surface-variant">
-              {s.lines.map((l, j) => <div key={j} className="truncate" title={l}>{l}</div>)}
-            </div>
-            {i < steps.length - 1 && <Icon name="chevron_right" className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-surface text-outline lg:block" size={22} />}
+      {/* 핵심 숫자 4개 */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map((x) => (
+          <Link key={x.label} to={x.to} className="card p-4 transition-shadow hover:shadow-md">
+            <p className="mono-label text-on-surface-variant">{x.label}</p>
+            <p className={`headline mt-1 text-2xl font-bold ${TONE[x.tone]}`}>{x.value} <span className="text-sm font-medium text-on-surface-variant">{x.unit}</span></p>
+            <p className="mt-0.5 truncate text-xs text-on-surface-variant">{x.sub}</p>
           </Link>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* 부족 경고 */}
-        <div className="card p-5 lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="warning" className="text-secondary" /> 원료 확보 현황</h3>
-            <Link to="/plan" className="text-xs font-semibold text-secondary hover:underline">납품계획</Link>
-          </div>
-          {[{ month: now, need: calc.need(now), have: calc.haveNow, gap: calc.gapNow, label: `${m}월`, haveNote: "재고 + 이번 달 입항 예정" },
-            { month: next, need: calc.need(next), have: calc.haveNext, gap: calc.gapNext, label: `${Number(next.slice(5))}월`, haveNote: "이월 + 다음 달 입항 예정" }].map((x) => (
-            <div key={x.month} className="mb-4 last:mb-0">
-              <div className="flex items-baseline justify-between">
-                <span className="font-bold">{x.label}</span>
-                {x.need ? (
-                  x.gap < 0
-                    ? <span className="font-bold text-error">부족 {fmt(-x.gap)} MT</span>
-                    : <span className="font-bold text-success">여유 {fmt(x.gap)} MT</span>
-                ) : <span className="text-xs text-on-surface-variant">납품계획 미입력</span>}
-              </div>
-              <Bar label="납품 필요" value={x.need} max={Math.max(x.need, x.have, 1)} cls="bg-outline" />
-              <Bar label="확보" value={x.have} max={Math.max(x.need, x.have, 1)} cls={x.need && x.gap < 0 ? "bg-error" : "bg-primary"} note={x.haveNote} />
-            </div>
-          ))}
-          <p className="mt-3 text-[11px] text-on-surface-variant">원료 MT 기준 단순 비교예요 (가공 로스는 아직 반영 안 함). 입항 예정은 아직 입고 전 단계(계약·선적·도착·통관)인 건만 셉니다.</p>
-        </div>
+      {/* 선박 일정 */}
+      <div className="card overflow-hidden">
+        <ShipCalendar imports={imports} onUpdated={(item) => setImports((prev) => (prev || []).map((x) => (x.id === item.id ? item : x)))}
+          onCreated={(item) => setImports((prev) => [item, ...(prev || [])])} />
+      </div>
 
-        {/* 할 일 */}
-        <div className="card overflow-hidden lg:col-span-3">
-          <div className="flex items-center justify-between border-b border-outline-variant px-5 py-3">
-            <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="checklist" className="text-secondary" /> 할 일</h3>
-            <span className="text-xs text-on-surface-variant">{todos.length}건</span>
-          </div>
-          {todos.length === 0 ? <p className="px-5 py-10 text-center text-sm text-on-surface-variant">지금 챙길 일이 없어요</p> : (
-            <ul className="max-h-[360px] divide-y divide-outline-variant overflow-y-auto">
-              {todos.map((x, i) => (
-                <li key={i}>
-                  <Link to={x.to} className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-container-low">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${x.tone === "red" ? "bg-error-container text-error" : x.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-surface-container-highest text-on-surface-variant"}`}>
-                      <Icon name={x.icon} size={18} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{x.text}</span>
-                      {x.sub && <span className="block truncate text-xs text-on-surface-variant">{x.sub}</span>}
-                    </span>
-                    <Icon name="chevron_right" className="text-on-surface-variant" size={18} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* 할 일 */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-outline-variant px-5 py-3">
+          <h3 className="headline flex items-center gap-2 text-lg font-bold text-primary"><Icon name="checklist" className="text-secondary" /> 할 일</h3>
+          <span className="text-xs text-on-surface-variant">{todos.length > shown.length ? `급한 순 ${shown.length}건 / 전체 ${todos.length}건` : `${todos.length}건`}</span>
         </div>
+        {shown.length === 0 ? <p className="px-5 py-8 text-center text-sm text-on-surface-variant">지금 챙길 일이 없어요</p> : (
+          <ul className="grid divide-y divide-outline-variant md:grid-cols-2 md:divide-y-0">
+            {shown.map((x, i) => (
+              <li key={i} className="md:border-b md:border-outline-variant">
+                <Link to={x.to} className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-container-low">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${x.tone === "red" ? "bg-error" : x.tone === "amber" ? "bg-amber-500" : "bg-outline"}`} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{x.text}</span>
+                    {x.sub && <span className="block truncate text-xs text-on-surface-variant">{x.sub}</span>}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <FxCard />
-    </div>
-  );
-}
-
-function Bar({ label, value, max, cls, note }: { label: string; value: number; max: number; cls: string; note?: string }) {
-  return (
-    <div className="mt-1.5">
-      <div className="flex justify-between text-xs text-on-surface-variant"><span>{label}{note ? ` (${note})` : ""}</span><span>{fmt(value)} MT</span></div>
-      <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-surface-container-highest"><div className={`h-full ${cls}`} style={{ width: `${Math.min(100, (value / max) * 100)}%` }} /></div>
     </div>
   );
 }
